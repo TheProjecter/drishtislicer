@@ -20,7 +20,7 @@ class AbstractRemapVolume : public QObject
   };
   
    
-  virtual bool setFile(QList<QString>) = 0;
+  virtual bool setFile(QString) = 0;
   virtual void replaceFile(QString) {}
   virtual void gridSize(int&, int&, int&) = 0;
   
@@ -67,7 +67,7 @@ class AbstractRemapVolume : public QObject
 			   int, int, int, int, int, int) = 0;
 
  protected :
-  QList<QString> m_fileName;
+  QString m_fileName;
   int m_depth, m_width, m_height;
   int m_voxelType;
   int m_headerBytes;

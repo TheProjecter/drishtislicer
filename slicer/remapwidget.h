@@ -17,7 +17,7 @@ class RemapWidget : public QWidget
  public :
   RemapWidget(QWidget *parent=NULL);
 
-  bool setFile(QList<QString> flnm);
+  bool setFile(QString);
 
  public slots :
   void getHistogram();  
@@ -43,7 +43,7 @@ class RemapWidget : public QWidget
  private :
   Ui::RemapWidget ui;
 
-  QList<QString> m_volumeFile;
+  QString m_volumeFile;
 
   AbstractRemapVolume *m_remapVolume;
   RemapHistogramWidget *m_histogramWidget;

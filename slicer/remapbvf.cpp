@@ -126,12 +126,11 @@ RemapBvf::gridSize(int& d, int& w, int& h)
 void
 RemapBvf::replaceFile(QString flnm)
 {
-  m_fileName.clear();
-  m_fileName << flnm;
+  m_fileName = flnm;
 }
 
 bool
-RemapBvf::setFile(QList<QString> fl)
+RemapBvf::setFile(QString fl)
 {
   m_fileName = fl;
 
@@ -139,7 +138,7 @@ RemapBvf::setFile(QList<QString> fl)
   int blockSize;
 
   QDomDocument document;
-  QFile f(m_fileName[0].toAscii().data());
+  QFile f(m_fileName.toAscii().data());
   if (f.open(QIODevice::ReadOnly))
     {
       document.setContent(&f);
@@ -197,7 +196,7 @@ RemapBvf::setFile(QList<QString> fl)
   m_headerBytes = m_skipBytes = 0;
 
   // -- override if we are dealing with mapped file - .bvf
-  if (m_fileName[0].right(6) != "rawbvf")
+  if (m_fileName.right(6) != "rawbvf")
     m_voxelType = _UChar;
 
   m_bytesPerVoxel = 1;
@@ -210,7 +209,7 @@ RemapBvf::setFile(QList<QString> fl)
 
   m_currentSlice = m_currentAxis = -1;
 
-  m_bfReader.setBaseFilename(m_fileName[0]);
+  m_bfReader.setBaseFilename(m_fileName);
   m_bfReader.setDepth(m_depth);
   m_bfReader.setWidth(m_width);
   m_bfReader.setHeight(m_height);
@@ -962,7 +961,7 @@ RemapBvf::rawValue(int d, int w, int h)
 //      return pair;
 //    }
 //
-//  QFile fin(m_fileName[0]);
+//  QFile fin(m_fileName);
 //  fin.open(QFile::ReadOnly);
 //  fin.seek(m_skipBytes +
 //	   m_bytesPerVoxel*(d*m_width*m_height +
@@ -1094,7 +1093,7 @@ RemapBvf::saveTrimmed(QString trimFile,
 //  fout.write((char*)&mY, 4);
 //  fout.write((char*)&mZ, 4);
 //
-//  QFile fin(m_fileName[0]);
+//  QFile fin(m_fileName);
 //  fin.open(QFile::ReadOnly);
 //  fin.seek(m_skipBytes + nbytes*dmin);
 //

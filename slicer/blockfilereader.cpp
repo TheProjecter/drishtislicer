@@ -27,7 +27,9 @@ BlockFileReader::BlockFileReader()
 
 BlockFileReader::~BlockFileReader()
 {
-  m_blockReader.exit();
+  m_blockReader.terminate();
+  m_blockReader.wait();
+
   reset();
 }
 

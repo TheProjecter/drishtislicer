@@ -31,6 +31,7 @@ class DrishtiSlicer : public QMainWindow
 
   void loadSettings();
   void saveSettings();
+  void loadBvf(QString);
 };
 
 #endif

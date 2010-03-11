@@ -30,7 +30,6 @@ BlockReader::~BlockReader()
       m_interrupt = true;
       m_condition.wakeOne();
       m_mutex.unlock();
-      wait();
     }
 
   m_baseFilename.clear();
@@ -47,7 +46,6 @@ BlockReader::~BlockReader()
 	(m_blockOffset[il])[i].clear();
       m_blockOffset[il].clear();
     }
-
 }
 
 void BlockReader::setMaxCacheSize(int mcs) { m_maxCacheSize = mcs; }

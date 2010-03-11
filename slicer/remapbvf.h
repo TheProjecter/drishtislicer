@@ -14,7 +14,7 @@ class RemapBvf : public AbstractRemapVolume
   RemapBvf();
   ~RemapBvf();
 
-  bool setFile(QList<QString>);
+  bool setFile(QString);
   void replaceFile(QString);
   void setVoxelType(int);
   void setGridSize(int, int, int);

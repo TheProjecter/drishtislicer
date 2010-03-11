@@ -63,7 +63,7 @@ RemapWidget::showWidgets()
 }
 
 bool
-RemapWidget::setFile(QList<QString> flnm)
+RemapWidget::setFile(QString flnm)
 {  
   Global::statusBar()->clearMessage();
 

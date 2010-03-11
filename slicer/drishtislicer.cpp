@@ -99,12 +99,13 @@ DrishtiSlicer::on_actionBVF_triggered()
   if (flnm.isEmpty())
     return;
 
-  QFileInfo f(flnm);
-  Global::setPreviousDirectory(f.absolutePath());
-
-  QStringList flnms;
-  flnms << flnm;  
-  m_remapWidget->setFile(flnms);
+  loadBvf(flnm);
+//  QFileInfo f(flnm);
+//  Global::setPreviousDirectory(f.absolutePath());
+//
+//  QStringList flnms;
+//  flnms << flnm;  
+//  m_remapWidget->setFile(flnms);
 }
 
 void
@@ -151,20 +152,27 @@ DrishtiSlicer::dropEvent(QDropEvent *event)
 		  StaticFunctions::checkExtension(url.toLocalFile(), ".rawbvf") ||
 		  StaticFunctions::checkExtension(url.toLocalFile(), ".dvf"))
 		{
-		  QFileInfo f((data->urls())[0].toLocalFile());
-		  Global::setPreviousDirectory(f.absolutePath());
-		  
-		  QStringList flnms;
-		  for(int i=0; i<data->urls().count(); i++)
-		    flnms << (data->urls())[i].toLocalFile();
-		  
-		  m_remapWidget->setFile(flnms);
+		  QString flnm = (data->urls())[0].toLocalFile();
+		  loadBvf(flnm);
 		}
 	    }
 	}
     }
 }
 
+void
+DrishtiSlicer::loadBvf(QString flnm)
+{
+  if (m_remapWidget)
+    delete m_remapWidget;
+
+  m_remapWidget = new RemapWidget();
+  setCentralWidget(m_remapWidget);
+  
+  QFileInfo f(flnm);
+  Global::setPreviousDirectory(f.absolutePath());		  
+  m_remapWidget->setFile(flnm);
+}
 
 void
 DrishtiSlicer::on_actionExit_triggered()
