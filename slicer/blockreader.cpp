@@ -2,7 +2,8 @@
 
 BlockReader::BlockReader(QObject *parent) : QThread(parent)
 {
-  m_maxCacheSize = 10000;
+  m_level = 0;
+  m_maxCacheSize = 100;
   m_blockSize = 32;
   m_bytesPerVoxel = 1;
   m_baseFilename.clear();

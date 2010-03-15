@@ -13,7 +13,7 @@ BlockFileReader::BlockFileReader()
 
   m_maxFileSize = 1024*1024*1024;
   m_blockSize = 32;
-  m_maxCacheSize = 10000;
+  m_maxCacheSize = 5000;
 
   m_prevfno = -1;
 
