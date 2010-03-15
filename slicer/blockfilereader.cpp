@@ -152,9 +152,6 @@ QString BlockFileReader::fileName() { return m_filename; }
 bool
 BlockFileReader::exists()
 {
-  int bb = m_blockSize;
-  int bpb = bb*bb*bb*m_bytesPerVoxel;
-
   if (!m_depthSlice)
     m_depthSlice = new uchar[m_width*m_height*m_bytesPerVoxel];
   if (!m_widthSlice)

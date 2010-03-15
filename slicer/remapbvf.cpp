@@ -669,12 +669,37 @@ RemapBvf::startDepthSliceImage(int slc,
   if (m_bfReader.minLevel() == 0)
     return;
 
+  m_currentAxis = 0;
+  m_currentSlice = slc;
+
   m_wstart = wstart;
   m_wend = wend;
   m_hstart = hstart;
   m_hend = hend;
-  emit getDepthSlice(m_bfReader.minLevel()-1, slc,
+
+  int level = 0;
+  bool done = false;
+  while (!done)
+    {
+      if (m_bfReader.depthBlocksPresent(level, slc,
+					m_wstart, m_wend,
+					m_hstart, m_hend))
+	done = true;
+      else
+	level++;
+
+      if (level >= m_bfReader.minLevel()-1)
+	{
+	  level = m_bfReader.minLevel()-1;
+	  done = true;
+	}
+    }
+
+  emit getDepthSlice(level, slc,
 		     m_wstart, m_wend, m_hstart, m_hend);
+
+//  emit getDepthSlice(m_bfReader.minLevel()-1, slc,
+//		     m_wstart, m_wend, m_hstart, m_hend);
 }
 void
 RemapBvf::startWidthSliceImage(int slc,
@@ -684,12 +709,36 @@ RemapBvf::startWidthSliceImage(int slc,
   if (m_bfReader.minLevel() == 0)
     return;
 
+  m_currentAxis = 1;
+  m_currentSlice = slc;
+
   m_dstart = dstart;
   m_dend = dend;
   m_hstart = hstart;
   m_hend = hend;
-  emit getWidthSlice(m_bfReader.minLevel()-1, slc,
+
+  int level = 0;
+  bool done = false;
+  while (!done)
+    {
+      if (m_bfReader.widthBlocksPresent(level, slc,
+					m_dstart, m_dend,
+					m_hstart, m_hend))
+	done = true;
+      else
+	level++;
+
+      if (level >= m_bfReader.minLevel()-1)
+	{
+	  level = m_bfReader.minLevel()-1;
+	  done = true;
+	}
+    }
+
+  emit getWidthSlice(level, slc,
 		     m_dstart, m_dend, m_hstart, m_hend);
+//  emit getWidthSlice(m_bfReader.minLevel()-1, slc,
+//		     m_dstart, m_dend, m_hstart, m_hend);
 }
 void
 RemapBvf::startHeightSliceImage(int slc,
@@ -699,12 +748,36 @@ RemapBvf::startHeightSliceImage(int slc,
   if (m_bfReader.minLevel() == 0)
     return;
 
+  m_currentAxis = 2;
+  m_currentSlice = slc;
+
   m_dstart = dstart;
   m_dend = dend;
   m_wstart = wstart;
   m_wend = wend;
-  emit getHeightSlice(m_bfReader.minLevel()-1, slc,
+
+  int level = 0;
+  bool done = false;
+  while (!done)
+    {
+      if (m_bfReader.heightBlocksPresent(level, slc,
+					 m_dstart, m_dend,
+					 m_wstart, m_wend))
+	done = true;
+      else
+	level++;
+
+      if (level >= m_bfReader.minLevel()-1)
+	{
+	  level = m_bfReader.minLevel()-1;
+	  done = true;
+	}
+    }
+
+  emit getHeightSlice(level, slc,
 		     m_dstart, m_dend, m_wstart, m_wend);
+//  emit getHeightSlice(m_bfReader.minLevel()-1, slc,
+//		     m_dstart, m_dend, m_wstart, m_wend);
 }
 //---------------------------
 

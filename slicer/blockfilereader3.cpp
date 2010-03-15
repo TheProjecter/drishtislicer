@@ -53,6 +53,59 @@ BlockFileReader::getLowresHeightSlice(int h, int& ssd, int& ssw)
   return m_lowresSlice;
 }
 
+bool
+BlockFileReader::heightBlocksPresent(int level, int h,
+				    int dstart, int dend,
+				    int wstart, int wend)
+{
+  if (level < 0)
+    return true;
+
+  m_startdblocks = dstart/m_blockSize;
+  m_enddblocks = qMin(m_dblocks, dend/m_blockSize + 1);
+
+  m_startwblocks = wstart/m_blockSize;
+  m_endwblocks = qMin(m_wblocks, wend/m_blockSize + 1);
+
+  m_minwblocks = m_startwblocks;
+  m_maxwblocks = qMin(m_minwblocks + 400, m_endwblocks);
+
+  int ndblocks = qMax(400/(m_maxwblocks-m_minwblocks+1), 1);
+  m_mindblocks = m_startdblocks;
+  m_maxdblocks = qMin(m_mindblocks + ndblocks, m_enddblocks);
+
+  int hno = h/m_blockSize;
+  int hno1 = hno;
+  int p2 = qPow(2, m_level);
+  int localSlice = (h%m_blockSize)/p2;
+  bool nextslab = false;
+  if (p2*(localSlice+1)>=m_blockSize)
+    {
+      hno1 = hno+1;
+      nextslab = true;
+    }
+
+  for(int d=m_mindblocks; d<m_maxdblocks; d++)
+    for(int w=m_minwblocks; w<m_maxwblocks; w++)
+      {
+	int blkno = (d*m_wblocks*m_hblocks +
+		     w*m_hblocks + hno);
+
+	if (! m_blockCache[m_level].contains(blkno))
+	  return false;
+
+	if (nextslab)
+	  {
+	    int blkno1 = (d*m_wblocks*m_hblocks +
+			  w*m_hblocks + hno1);
+
+	    if (! m_blockCache[m_level].contains(blkno1))
+	      return false;
+	  }
+      }
+  return true;
+}
+
 void
 BlockFileReader::getHeightSlice(int level, int h,
 				 int dstart, int dend,

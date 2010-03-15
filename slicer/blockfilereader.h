@@ -69,6 +69,10 @@ class BlockFileReader : public QObject
   uchar* getLowresWidthSlice(int, int&, int&);
   uchar* getLowresHeightSlice(int, int&, int&);
 
+  bool depthBlocksPresent(int, int, int, int, int, int);
+  bool widthBlocksPresent(int, int, int, int, int, int);
+  bool heightBlocksPresent(int, int, int, int, int, int);
+
  signals :
   void depthSlice(int, int, bool,
 		  QPair<int, int>, QPair<int, int>);

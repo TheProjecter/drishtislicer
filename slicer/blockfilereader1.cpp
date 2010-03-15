@@ -49,6 +49,57 @@ BlockFileReader::getLowresDepthSlice(int d, int& ssw, int& ssh)
   return m_lowresSlice;
 }
 
+bool
+BlockFileReader::depthBlocksPresent(int level, int d,
+				    int wstart, int wend,
+				    int hstart, int hend)
+{
+  if (level < 0)
+    return true;
+
+  m_startwblocks = wstart/m_blockSize;
+  m_endwblocks = qMin(m_wblocks, wend/m_blockSize + 1);
+
+  m_starthblocks = hstart/m_blockSize;
+  m_endhblocks = qMin(m_hblocks, hend/m_blockSize + 1);
+
+  m_minhblocks = m_starthblocks;
+  m_maxhblocks = qMin(m_minhblocks + 1000, m_endhblocks);
+
+  int nwblocks = qMax(1000/(m_maxhblocks-m_minhblocks+1), 1);
+  m_minwblocks = m_startwblocks;
+  m_maxwblocks = qMin(m_minwblocks + nwblocks, m_endwblocks);
+
+
+  int dno = d/m_blockSize;
+  int dno1 = dno+1;
+  int p2 = qPow(2, level);
+  int localSlice = (d%m_blockSize)/p2;
+  bool nextslab = false;
+  if (p2*(localSlice+1)>=m_blockSize)
+    nextslab = true;
+
+  for(int w=m_minwblocks; w<m_maxwblocks; w++)
+    for(int h=m_minhblocks; h<m_maxhblocks; h++)
+      {
+	int blkno = (dno*m_wblocks*m_hblocks +
+		     w*m_hblocks + h);
+
+	if (! m_blockCache[level].contains(blkno))
+	  return false;
+
+	if (nextslab)
+	  {
+	    int blkno1 = (dno1*m_wblocks*m_hblocks +
+			 w*m_hblocks + h);
+
+	    if (! m_blockCache[level].contains(blkno1))
+	      return false;
+	  }
+      }
+  return true;
+}
+
 void
 BlockFileReader::getDepthSlice(int level, int d,
 				int wstart, int wend,
@@ -139,7 +190,6 @@ BlockFileReader::depthSliceDone()
   if (m_blockCache[m_level].count() == 0)
     return;
 
-
   int d = m_currentSlice;
 
   int p2 = qPow(2, m_level);
@@ -212,9 +262,6 @@ BlockFileReader::depthSliceDone()
 		      DEPTHSLICE_1(int)		    
 		    else if (m_voxelType == _Float)
 		      DEPTHSLICE_1(float)		    
-//		    for (int iss=0; iss<bb*bb; iss++)
-//		      interp[iss] = (1.0-frc)*((uchar*)blockData)[idx0+iss] +
-//			frc*((uchar*)blockData)[idx1+iss];
 		  }
 		else
 		  {
@@ -232,11 +279,6 @@ BlockFileReader::depthSliceDone()
 		      DEPTHSLICE_2(int)		    
 		    else if (m_voxelType == _Float)
 		      DEPTHSLICE_2(float)		    
-
-//		    uchar *block1Data = (m_blockCache[m_level])[blkno1];
-//		    for (int iss=0; iss<bb*bb; iss++)
-//		      interp[iss] = (1.0-frc)*((uchar*)blockData)[idx0+iss] +
-//			                  frc*block1Data[idx1+iss];
 		  }
 
 		for(int iw=0; iw<iwend; iw++)

@@ -28,7 +28,7 @@ RemapImage::RemapImage(QWidget *parent) :
   m_pickHeight = 0;
 
   m_offsetX = m_offsetY = 0;
-  m_zoom = 1;
+  m_zoom = 0;
   setMinimumSize(QSize(100, 100));
 
   m_rubberBand = QRect(0,0,0,0);
@@ -226,7 +226,7 @@ RemapImage::sliceChanged(int slc)
   else
     m_currHSlice = m_currSlice = slc;
 
-  emit getSliceLowres(m_currSlice);
+  //emit getSliceLowres(m_currSlice);
   emit getSlice(m_currSlice);
 }
 
@@ -350,7 +350,8 @@ RemapImage::setSliceType(int st)
   int frmWidth = prt->rect().width()-50;
   float rH = (float)frmHeight/(float)height;
   float rW = (float)frmWidth/(float)width;
-  m_zoom = qMin(rH, rW);
+  if (m_zoom < 0.01)
+    m_zoom = qMin(rH, rW);
   
   emit getSliceLowres(m_currSlice);
   emit getSlice(m_currSlice);
