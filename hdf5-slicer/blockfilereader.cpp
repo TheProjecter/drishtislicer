@@ -237,25 +237,11 @@ BlockFileReader::loadDict()
 		dataspace );
   h5file.close();
 
-//  QString lowresFile = m_baseFilename + ".lowres";
-//  QFile lfile(lowresFile);
-//  lfile.open(QIODevice::ReadOnly);
-//  lfile.read((char*)&m_sslevel, 1);
-//  lfile.read((char*)&m_ssd, 4);
-//  lfile.read((char*)&m_ssw, 4);
-//  lfile.read((char*)&m_ssh, 4);
-//  m_ssvol = new uchar[m_ssd*m_ssw*m_ssh*m_bytesPerVoxel];
-//  lfile.read((char*)m_ssvol, m_ssd*m_ssw*m_ssh*m_bytesPerVoxel);
-//  lfile.close();
-
   m_minLevel = 0;
-  int p2 = 1;
-  while(m_sslevel/p2 > 0)
-    {
-      p2 *= 2;
-      m_minLevel++;
-    }
-  m_minLevel = qMax(0, m_minLevel-1);
+  if (m_sslevel > 0)
+    m_minLevel = logf(m_sslevel)/logf(2.0);
+
+  //  QMessageBox::information(0, "", QString("%1 %2").arg(m_minLevel).arg(m_sslevel));
 
   initializeBlockReader();
 }
@@ -269,6 +255,7 @@ BlockFileReader::initializeBlockReader()
   m_blockReader.setBytesPerVoxel(m_bytesPerVoxel);
   m_blockReader.setBaseFilename(m_baseFilename);
   m_blockReader.setBlockGridSize(m_dblocks, m_wblocks, m_hblocks);
+  m_blockReader.setMinLevel(m_minLevel);
 
   for (int ib=0; ib<m_minLevel; ib++)
     m_blockReader.setBlockCache(ib, &m_blockCache[ib]);

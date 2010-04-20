@@ -14,9 +14,6 @@ BlockFileWriter::BlockFileWriter()
 
   m_hdf5file = 0;
 
-//  for(int ib=0; ib<10; ib++)
-//    m_hdf5file[ib] = 0;
-
   reset();
 }
 
@@ -27,13 +24,6 @@ BlockFileWriter::reset()
 {
   if (m_hdf5file)
     m_hdf5file->close();
-
-//  for(int ib=0; ib<=m_minLevel; ib++)
-//    {
-//      if (m_hdf5file[ib])
-//	m_hdf5file[ib]->close();
-//      m_filename[ib].clear();
-//    }
 
   m_baseFilename.clear();
   m_header = 0;
@@ -189,23 +179,11 @@ BlockFileWriter::startAddSlice()
       IntType datatype(PredType::NATIVE_UCHAR);
       datatype.setOrder( H5T_ORDER_LE );
       
-//      m_filename[ib] = m_baseFilename +
-//	               QString(".%1").arg(m_blockSize/qPow(2, ib)) +
-//	               ".h5";
-//      
-//      m_hdf5file[ib] = new H5File(m_filename[ib].toAscii().data(),
-//				  H5F_ACC_TRUNC);
-
       QString dataname = QString("lod-%1").arg(ib);
-//      m_hdf5dataset[ib] = m_hdf5file[ib]->createDataSet( dataname.toAscii().data(),
-//							 datatype,
-//							 dataspace,
-//							 cparms );  
-
       m_hdf5dataset[ib] = m_hdf5file->createDataSet( dataname.toAscii().data(),
-							datatype,
-							dataspace,
-							cparms );  
+						     datatype,
+						     dataspace,
+						     cparms );  
     }
 
   IntType datatype(PredType::NATIVE_UCHAR);
@@ -234,9 +212,6 @@ BlockFileWriter::endAddSlice()
     }
 
   m_hdf5file->close();
-
-//  for(int ib=0; ib<m_minLevel; ib++)
-//    m_hdf5file[ib]->close();
 
   endSliceBlock();
 

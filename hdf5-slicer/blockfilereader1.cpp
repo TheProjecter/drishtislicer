@@ -97,6 +97,7 @@ BlockFileReader::depthBlocksPresent(int level, int d,
 	      return false;
 	  }
       }
+
   return true;
 }
 
@@ -160,8 +161,6 @@ BlockFileReader::calculateBlocksForDepthSlice(int d)
 	    blockNumbers.append(blkno1);
 	  }
       }
-
-  //  QMessageBox::information(0, "", QString("level - %1").arg(m_level));
 
   m_blockReader.loadBlocks(m_level, blockNumbers);
 }

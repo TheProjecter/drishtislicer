@@ -50,6 +50,7 @@ void BlockReader::setMaxCacheSize(int mcs) { m_maxCacheSize = mcs; }
 void BlockReader::setBlockSize(int bs) { m_blockSize = bs; }
 void BlockReader::setBytesPerVoxel(int bpv) { m_bytesPerVoxel = bpv; }
 void BlockReader::setBaseFilename(QString bf) { m_baseFilename = bf; }
+void BlockReader::setMinLevel(int ml) { m_minLevel = ml; }
 void BlockReader::setBlockGridSize(int dno, int wno, int hno)
 {
   m_dblocks = dno;
@@ -75,13 +76,19 @@ BlockReader::getBlock(int level, int blkno, uchar* block)
 
       m_hdf5file = new H5File(filename.toAscii().data(),
 			      H5F_ACC_RDONLY);
+
+      for(int il=0; il<m_minLevel; il++)
+	{
+	  QString dataname = QString("lod-%1").arg(il);
+	  m_hdf5dataset[il] = m_hdf5file->openDataSet(dataname.toAscii().data());
+	}
     }
 
-  if (m_hdf5dataset[level].getStorageSize() == 0)
-    {
-      QString dataname = QString("lod-%1").arg(level);
-      m_hdf5dataset[level] = m_hdf5file->openDataSet(dataname.toAscii().data());
-    }
+//  if (m_hdf5dataset[level].getStorageSize() == 0)
+//    {
+//      QString dataname = QString("lod-%1").arg(level);
+//      m_hdf5dataset[level] = m_hdf5file->openDataSet(dataname.toAscii().data());
+//    }
 
 //  if (!m_hdf5file[level])
 //    {

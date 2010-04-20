@@ -22,6 +22,7 @@ class BlockReader : public QThread
   void setBlockSize(int);
   void setBytesPerVoxel(int);
   void setBaseFilename(QString);
+  void setMinLevel(int);
   void setBlockGridSize(int, int, int);
 
   void setBlockCache(int, QHash<long, uchar*> *);
@@ -36,6 +37,7 @@ class BlockReader : public QThread
   void run();
 
  private :
+  int m_minLevel;
   int m_level;
   QVector<int> m_blkno;
 

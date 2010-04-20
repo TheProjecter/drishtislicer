@@ -626,8 +626,6 @@ RemapBvf::getDepthSliceImage(int slc)
   m_wstart = 0;  m_wend = m_width;
   m_hstart = 0;  m_hend = m_height;
 
-  QMessageBox::information(0, "", QString("%1").arg(m_bfReader.minLevel()));
-
   if (m_bfReader.minLevel() > 0)
     emit getDepthSlice(m_bfReader.minLevel()-1, slc,
 		       m_wstart, m_wend, m_hstart, m_hend);
@@ -699,9 +697,6 @@ RemapBvf::startDepthSliceImage(int slc,
 
   emit getDepthSlice(level, slc,
 		     m_wstart, m_wend, m_hstart, m_hend);
-
-//  emit getDepthSlice(m_bfReader.minLevel()-1, slc,
-//		     m_wstart, m_wend, m_hstart, m_hend);
 }
 void
 RemapBvf::startWidthSliceImage(int slc,

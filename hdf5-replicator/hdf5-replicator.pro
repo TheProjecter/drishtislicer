@@ -4,20 +4,20 @@
 
 #include( ../../version.pri )
 
-RESOURCES = hdf5-import.qrc
+RESOURCES = hdf5-replicator.qrc
 
-TEMPLATE = vcapp
+TEMPLATE = app
 
 DEPENDPATH += .
 
 QT += xml
 
-CONFIG += assistant
+#CONFIG += assistant
 CONFIG += debug_and_release
 
 DESTDIR = ../bin
 
-TARGET = hdf5import
+TARGET = hdf5replicator
 
 win32 {
 
@@ -45,7 +45,7 @@ LIBS += hdf5_cpp.lib \
 	core_rl_magick_.lib \
 	core_rl_wand_.lib \
 	szlib.lib 
-#	zlib.lib
+
 
 QMAKE_LFLAGS += /NODEFAULTLIB:msvcrt.lib  \
 	        /NODEFAULTLIB:msvcprt.lib
