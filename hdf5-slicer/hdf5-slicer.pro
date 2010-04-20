@@ -90,6 +90,7 @@ FORMS += remapwidget.ui \
 
 # Input
 HEADERS += global.h \
+	   common.h \
 	   staticfunctions.h \
 	   remapwidget.h \
            remaphistogramline.h \

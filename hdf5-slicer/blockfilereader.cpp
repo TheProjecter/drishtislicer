@@ -231,10 +231,37 @@ BlockFileReader::loadDict()
   DataSpace memspace(3, dims);
 
   m_ssvol = new uchar[m_ssd*m_ssw*m_ssh*m_bytesPerVoxel];
-  dataset.read( m_ssvol,
-		PredType::NATIVE_UCHAR,
-		memspace,
-		dataspace );
+  if (m_voxelType == _UChar)
+    dataset.read( m_ssvol,
+		  PredType::NATIVE_UCHAR,
+		  memspace,
+		  dataspace );
+  else if (m_voxelType == _Char)
+    dataset.read( m_ssvol,
+		  PredType::NATIVE_CHAR,
+		  memspace,
+		  dataspace );
+  else if (m_voxelType == _UShort)
+    dataset.read( m_ssvol,
+		  PredType::NATIVE_USHORT,
+		  memspace,
+		  dataspace );
+  else if (m_voxelType == _Short)
+    dataset.read( m_ssvol,
+		  PredType::NATIVE_SHORT,
+		  memspace,
+		  dataspace );
+  else if (m_voxelType == _Int)
+    dataset.read( m_ssvol,
+		  PredType::NATIVE_INT,
+		  memspace,
+		  dataspace );
+  else if (m_voxelType == _Float)
+    dataset.read( m_ssvol,
+		  PredType::NATIVE_FLOAT,
+		  memspace,
+		  dataspace );
+
   h5file.close();
 
   m_minLevel = 0;
@@ -252,6 +279,7 @@ BlockFileReader::initializeBlockReader()
   m_blockReader.start();
   m_blockReader.setMaxCacheSize(m_maxCacheSize);
   m_blockReader.setBlockSize(m_blockSize);
+  m_blockReader.setVoxelType(m_voxelType);
   m_blockReader.setBytesPerVoxel(m_bytesPerVoxel);
   m_blockReader.setBaseFilename(m_baseFilename);
   m_blockReader.setBlockGridSize(m_dblocks, m_wblocks, m_hblocks);

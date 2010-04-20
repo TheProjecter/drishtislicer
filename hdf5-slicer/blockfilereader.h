@@ -13,16 +13,6 @@ class BlockFileReader : public QObject
  public :
   BlockFileReader();
   ~BlockFileReader();
-  
-  enum VoxelType
-  {
-    _UChar = 0,
-    _Char,
-    _UShort,
-    _Short,
-    _Int,
-    _Float
-  };
 
   QString fileName();
   bool exists();

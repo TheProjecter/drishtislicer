@@ -10,6 +10,8 @@
 #include "H5Cpp.h"
 using namespace H5;
 
+#include "common.h"
+
 class BlockReader : public QThread
 {
   Q_OBJECT
@@ -21,6 +23,7 @@ class BlockReader : public QThread
   void setMaxCacheSize(int);
   void setBlockSize(int);
   void setBytesPerVoxel(int);
+  void setVoxelType(int);
   void setBaseFilename(QString);
   void setMinLevel(int);
   void setBlockGridSize(int, int, int);
@@ -37,6 +40,7 @@ class BlockReader : public QThread
   void run();
 
  private :
+  int m_voxelType;
   int m_minLevel;
   int m_level;
   QVector<int> m_blkno;

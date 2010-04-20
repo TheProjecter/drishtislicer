@@ -5,6 +5,7 @@ BlockReader::BlockReader(QObject *parent) : QThread(parent)
   m_level = 0;
   m_maxCacheSize = 100;
   m_blockSize = 32;
+  m_voxelType = _UChar;
   m_bytesPerVoxel = 1;
   m_baseFilename.clear();
   m_dblocks = m_wblocks = m_hblocks = 0;
@@ -16,7 +17,6 @@ BlockReader::BlockReader(QObject *parent) : QThread(parent)
       m_prevfno[il] = -1;
       m_blockCache[il] = 0;
       m_lru[il].clear();
-      //m_hdf5file[il] = 0;
     }
 
   m_interrupt = false;  
@@ -38,16 +38,13 @@ BlockReader::~BlockReader()
     m_hdf5file->close();
 
   for (int il=0; il<10; il++)
-    {
-      m_lru[il].clear();
-//      if (m_hdf5file[il])
-//	m_hdf5file[il]->close();
-    }
+    m_lru[il].clear();
 
 }
 
 void BlockReader::setMaxCacheSize(int mcs) { m_maxCacheSize = mcs; }
 void BlockReader::setBlockSize(int bs) { m_blockSize = bs; }
+void BlockReader::setVoxelType(int vt) { m_voxelType = vt; }
 void BlockReader::setBytesPerVoxel(int bpv) { m_bytesPerVoxel = bpv; }
 void BlockReader::setBaseFilename(QString bf) { m_baseFilename = bf; }
 void BlockReader::setMinLevel(int ml) { m_minLevel = ml; }
@@ -84,26 +81,6 @@ BlockReader::getBlock(int level, int blkno, uchar* block)
 	}
     }
 
-//  if (m_hdf5dataset[level].getStorageSize() == 0)
-//    {
-//      QString dataname = QString("lod-%1").arg(level);
-//      m_hdf5dataset[level] = m_hdf5file->openDataSet(dataname.toAscii().data());
-//    }
-
-//  if (!m_hdf5file[level])
-//    {
-//      QString filename;
-//      filename = m_baseFilename +
-//	         QString(".%1").arg(bb) +
-//	         ".h5";
-//
-//      m_hdf5file[level] = new H5File(filename.toAscii().data(),
-//				     H5F_ACC_RDONLY);
-//
-//      QString dataname = QString("lod-%1").arg(level);
-//      m_hdf5dataset[level] = m_hdf5file[level]->openDataSet(dataname.toAscii().data());
-//    }
-
   DataSpace dataspace = m_hdf5dataset[level].getSpace();
 
   hsize_t offset[3], count[3];
@@ -120,10 +97,36 @@ BlockReader::getBlock(int level, int blkno, uchar* block)
   dimsm[2] = bb;
   DataSpace memspace( 3, dimsm );
 
-  m_hdf5dataset[level].read( block,
-			     PredType::NATIVE_UCHAR,
-			     memspace,
-			     dataspace );
+  if (m_voxelType == _UChar)
+    m_hdf5dataset[level].read( block,
+			       PredType::NATIVE_UCHAR,
+			       memspace,
+			       dataspace );
+  else if (m_voxelType == _Char)
+    m_hdf5dataset[level].read( block,
+			       PredType::NATIVE_CHAR,
+			       memspace,
+			       dataspace );
+  else if (m_voxelType == _UShort)
+    m_hdf5dataset[level].read( block,
+			       PredType::NATIVE_USHORT,
+			       memspace,
+			       dataspace );
+  else if (m_voxelType == _Short)
+    m_hdf5dataset[level].read( block,
+			       PredType::NATIVE_SHORT,
+			       memspace,
+			       dataspace );
+  else if (m_voxelType == _Int)
+    m_hdf5dataset[level].read( block,
+			       PredType::NATIVE_INT,
+			       memspace,
+			       dataspace );
+  else if (m_voxelType == _Float)
+    m_hdf5dataset[level].read( block,
+			       PredType::NATIVE_FLOAT,
+			       memspace,
+			       dataspace );
 }
 
 

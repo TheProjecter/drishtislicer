@@ -9,17 +9,6 @@ class AbstractRemapVolume : public QObject
 
  public :
 
-  enum VoxelType
-  {
-    _UChar,
-    _Char,
-    _UShort,
-    _Short,
-    _Int,
-    _Float
-  };
-  
-   
   virtual bool setFile(QString) = 0;
   virtual void replaceFile(QString) {}
   virtual void gridSize(int&, int&, int&) = 0;

@@ -14,9 +14,6 @@ BlockFileWriter::BlockFileWriter()
 
   m_hdf5file = 0;
 
-//  for(int ib=0; ib<10; ib++)
-//    m_hdf5file[ib] = 0;
-
   reset();
 }
 
@@ -27,13 +24,6 @@ BlockFileWriter::reset()
 {
   if (m_hdf5file)
     m_hdf5file->close();
-
-//  for(int ib=0; ib<=m_minLevel; ib++)
-//    {
-//      if (m_hdf5file[ib])
-//	m_hdf5file[ib]->close();
-//      m_filename[ib].clear();
-//    }
 
   m_baseFilename.clear();
   m_header = 0;
@@ -169,6 +159,15 @@ BlockFileWriter::startAddSlice()
   m_hdf5file = new H5File(filename.toAscii().data(),
 			  H5F_ACC_TRUNC);
 
+  IntType datatype;
+  if (m_voxelType == _UChar) datatype.copy(DataType(PredType::NATIVE_UCHAR));
+  else if (m_voxelType == _Char) datatype.copy(DataType(PredType::NATIVE_CHAR));
+  else if (m_voxelType == _UShort) datatype.copy(DataType(PredType::NATIVE_USHORT));
+  else if (m_voxelType == _Short) datatype.copy(DataType(PredType::NATIVE_SHORT));
+  else if (m_voxelType == _Int) datatype.copy(DataType(PredType::NATIVE_INT));
+  else if (m_voxelType == _Float) datatype.copy(DataType(PredType::NATIVE_FLOAT));
+  datatype.setOrder( H5T_ORDER_LE );
+      
   for(int ib=0; ib<=m_minLevel; ib++)
     {
       hsize_t bdim[3];              // block dimensions
@@ -186,30 +185,12 @@ BlockFileWriter::startAddSlice()
       cparms.setChunk(3, bdim);
       cparms.setDeflate(6);
       
-      IntType datatype(PredType::NATIVE_UCHAR);
-      datatype.setOrder( H5T_ORDER_LE );
-      
-//      m_filename[ib] = m_baseFilename +
-//	               QString(".%1").arg(m_blockSize/qPow(2, ib)) +
-//	               ".h5";
-//      
-//      m_hdf5file[ib] = new H5File(m_filename[ib].toAscii().data(),
-//				  H5F_ACC_TRUNC);
-
       QString dataname = QString("lod-%1").arg(ib);
-//      m_hdf5dataset[ib] = m_hdf5file[ib]->createDataSet( dataname.toAscii().data(),
-//							 datatype,
-//							 dataspace,
-//							 cparms );  
-
       m_hdf5dataset[ib] = m_hdf5file->createDataSet( dataname.toAscii().data(),
-							datatype,
-							dataspace,
-							cparms );  
+						     datatype,
+						     dataspace,
+						     cparms );  
     }
-
-  IntType datatype(PredType::NATIVE_UCHAR);
-  datatype.setOrder( H5T_ORDER_LE );
 
   hsize_t dimsf[3];              // dataset dimensions
   dimsf[0] = m_ssd;
@@ -235,9 +216,6 @@ BlockFileWriter::endAddSlice()
 
   m_hdf5file->close();
 
-//  for(int ib=0; ib<m_minLevel; ib++)
-//    m_hdf5file[ib]->close();
-
   endSliceBlock();
 
   saveDict();
@@ -253,10 +231,37 @@ BlockFileWriter::saveDict()
   DataSpace dataspace(3, dimsf);
   DataSpace memspace(3, dimsf);
       
-  m_lowres.write(m_ssvol,
-		 PredType::NATIVE_UCHAR,
-		 memspace,
-		 dataspace );
+  if (m_voxelType == _UChar) 
+    m_lowres.write(m_ssvol,
+		   PredType::NATIVE_UCHAR,
+		   memspace,
+		   dataspace );
+  else if (m_voxelType == _Char) 
+    m_lowres.write(m_ssvol,
+		   PredType::NATIVE_CHAR,
+		   memspace,
+		   dataspace );
+  else if (m_voxelType == _UShort)
+    m_lowres.write(m_ssvol,
+		   PredType::NATIVE_USHORT,
+		   memspace,
+		   dataspace );
+    else if (m_voxelType == _Short) 
+    m_lowres.write(m_ssvol,
+		   PredType::NATIVE_SHORT,
+		   memspace,
+		   dataspace );
+    else if (m_voxelType == _Int)
+    m_lowres.write(m_ssvol,
+		   PredType::NATIVE_INT,
+		   memspace,
+		   dataspace );
+  else if (m_voxelType == _Float)
+    m_lowres.write(m_ssvol,
+		   PredType::NATIVE_FLOAT,
+		   memspace,
+		   dataspace );   
+
   
   Attribute attrib = m_lowres.createAttribute("sslevel",
 					      PredType::NATIVE_UCHAR,
@@ -480,9 +485,30 @@ BlockFileWriter::dumpSliceBlocks(int ib, int d)
 	DataSpace dspace(3, dimsf);
 
 	dspace.selectHyperslab(H5S_SELECT_SET, bdim, offset);
-	m_hdf5dataset[ib].write(m_slice + lbno*bpb,
-				PredType::NATIVE_UCHAR,
-				memspace, dspace );
+       if (m_voxelType == _UChar) 
+	 m_hdf5dataset[ib].write(m_slice + lbno*bpb,
+				 PredType::NATIVE_UCHAR,
+				 memspace, dspace );
+       else if (m_voxelType == _Char)  
+	 m_hdf5dataset[ib].write(m_slice + lbno*bpb,
+				 PredType::NATIVE_CHAR,
+				 memspace, dspace );
+       else if (m_voxelType == _UShort)
+	 m_hdf5dataset[ib].write(m_slice + lbno*bpb,
+				 PredType::NATIVE_USHORT,
+				 memspace, dspace );
+       else if (m_voxelType == _Short) 
+	 m_hdf5dataset[ib].write(m_slice + lbno*bpb,
+				 PredType::NATIVE_SHORT,
+				 memspace, dspace );
+       else if (m_voxelType == _Int)   
+	 m_hdf5dataset[ib].write(m_slice + lbno*bpb,
+				 PredType::NATIVE_INT,
+				 memspace, dspace );
+       else if (m_voxelType == _Float) 
+	 m_hdf5dataset[ib].write(m_slice + lbno*bpb,
+				 PredType::NATIVE_FLOAT,
+				 memspace, dspace );
 
 	lbno ++;
       }
