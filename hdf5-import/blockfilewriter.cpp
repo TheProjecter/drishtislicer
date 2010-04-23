@@ -1,5 +1,7 @@
-#include "blockfilewriter.h"
 #include <QtGui>
+
+#include "common.h"
+#include "blockfilewriter.h"
 
 BlockFileWriter::BlockFileWriter()
 {
@@ -167,7 +169,7 @@ BlockFileWriter::startAddSlice()
   else if (m_voxelType == _Int) datatype.copy(DataType(PredType::NATIVE_INT));
   else if (m_voxelType == _Float) datatype.copy(DataType(PredType::NATIVE_FLOAT));
   datatype.setOrder( H5T_ORDER_LE );
-      
+
   for(int ib=0; ib<=m_minLevel; ib++)
     {
       hsize_t bdim[3];              // block dimensions
@@ -191,6 +193,7 @@ BlockFileWriter::startAddSlice()
 						     dataspace,
 						     cparms );  
     }
+
 
   hsize_t dimsf[3];              // dataset dimensions
   dimsf[0] = m_ssd;
@@ -241,7 +244,7 @@ BlockFileWriter::saveDict()
 		   PredType::NATIVE_CHAR,
 		   memspace,
 		   dataspace );
-  else if (m_voxelType == _UShort)
+  else if (m_voxelType == _UShort)  
     m_lowres.write(m_ssvol,
 		   PredType::NATIVE_USHORT,
 		   memspace,

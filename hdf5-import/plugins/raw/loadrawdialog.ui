@@ -28,7 +28,7 @@
    </size>
   </property>
   <property name="windowTitle" >
-   <string>Load Raw</string>
+   <string>Load Raw Plugin Dialog</string>
   </property>
   <layout class="QHBoxLayout" >
    <item>

@@ -3,17 +3,10 @@
 
 #include "ui_remapwidget.h"
 
+#include "volinterface.h"
+
 #include "remaphistogramwidget.h"
-//#include "remapncvolume.h"
-#include "remaprawvolume.h"
-#include "remaptomvolume.h"
-#include "remapimagevolume.h"
-#include "remapdicomvolume.h"
 #include "remapimage.h"
-#include "remapanalyze.h"
-#include "remaphdf4.h"
-#include "remaprawslices.h"
-#include "remaprawslabs.h"
 #include "gradienteditorwidget.h"
 #include "myslider.h"
 
@@ -53,7 +46,6 @@ class RemapWidget : public QWidget
   void getSlice(int);
   void getRawValue(int, int, int);
   void newMinMax(float, float);
-  void on_colorList_activated(int);
   void on_butZ_clicked();
   void on_butY_clicked();
   void on_butX_clicked();
@@ -71,10 +63,11 @@ class RemapWidget : public QWidget
  private :
   Ui::RemapWidget ui;
 
+  VolInterface *m_volInterface;
+
   QList<QString> m_volumeFile;
   int m_volumeType;
 
-  AbstractRemapVolume *m_remapVolume;
   RemapHistogramWidget *m_histogramWidget;
   RemapImage *m_imageWidget;
   GradientEditorWidget *m_gradientWidget;
@@ -85,6 +78,8 @@ class RemapWidget : public QWidget
   QStringList m_timeseriesFiles;
 
   int m_currSlice;
+
+  bool loadPlugin();
 
   bool reduceGridSize(QString,
 		      int, int, int);

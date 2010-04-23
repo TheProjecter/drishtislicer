@@ -1,36 +1,21 @@
+#include <QtGui>
+#include "common.h"
+#include "analyzeplugin.h"
 
-#include <math.h>
-
-#include "remaprawvolume.h"
-#include "loadrawdialog.h"
-
-#include <cmath>
-
-#ifdef Q_WS_WIN
-#include <float.h>
-#define ISNAN(v) _isnan(v)
-#else
-#ifdef Q_WS_MAC
-static int isnan(float x)
-{
-  return x != x;
-}
-#define ISNAN(v) isnan(v)
-#else
-#define ISNAN(v) isnan(v)
-#endif // __apple__
-#endif
-
-
-RemapRawVolume::RemapRawVolume()
+void
+AnalyzePlugin::init()
 {
   m_fileName.clear();
-  m_depth = m_width = m_height = 0;
-  m_skipBytes = 0;
-  m_headerBytes = 0;
-  m_voxelType = _UChar;
-  m_bytesPerVoxel = 1;
+  m_hdrFile.clear();
+  m_imgFile.clear();
 
+  m_description.clear();
+  m_depth = m_width = m_height = 0;
+  m_voxelType = _UChar;
+  m_voxelUnit = _Micron;
+  m_voxelSizeX = m_voxelSizeY = m_voxelSizeZ = 1;
+  m_skipBytes = 0;
+  m_bytesPerVoxel = 1;
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
 
@@ -40,15 +25,20 @@ RemapRawVolume::RemapRawVolume()
   m_image = 0;
 }
 
-RemapRawVolume::~RemapRawVolume()
+void
+AnalyzePlugin::clear()
 {
   m_fileName.clear();
-  m_depth = m_width = m_height = 0;
-  m_skipBytes = 0;
-  m_headerBytes = 0;
-  m_voxelType = _UChar;
-  m_bytesPerVoxel = 1;
+  m_hdrFile.clear();
+  m_imgFile.clear();
 
+  m_description.clear();
+  m_depth = m_width = m_height = 0;
+  m_voxelType = _UChar;
+  m_voxelUnit = _Micron;
+  m_voxelSizeX = m_voxelSizeY = m_voxelSizeZ = 1;
+  m_skipBytes = 0;
+  m_bytesPerVoxel = 1;
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
 
@@ -61,53 +51,41 @@ RemapRawVolume::~RemapRawVolume()
 }
 
 void
-RemapRawVolume::setMinMax(float rmin, float rmax)
+AnalyzePlugin::voxelSize(float& vx, float& vy, float& vz)
+  {
+    vx = m_voxelSizeX;
+    vy = m_voxelSizeY;
+    vz = m_voxelSizeZ;
+  }
+QString AnalyzePlugin::description() { return m_description; }
+int AnalyzePlugin::voxelType() { return m_voxelType; }
+int AnalyzePlugin::voxelUnit() { return m_voxelUnit; }
+int AnalyzePlugin::headerBytes() { return m_headerBytes; }
+
+void
+AnalyzePlugin::setMinMax(float rmin, float rmax)
 {
   m_rawMin = rmin;
   m_rawMax = rmax;
   
   generateHistogram();
 }
+float AnalyzePlugin::rawMin() { return m_rawMin; }
+float AnalyzePlugin::rawMax() { return m_rawMax; }
+QList<uint> AnalyzePlugin::histogram() { return m_histogram; }
+QList<float> AnalyzePlugin::rawMap() { return m_rawMap; }
+QList<uchar> AnalyzePlugin::pvlMap() { return m_pvlMap; }
 
 void
-RemapRawVolume::setMap(QList<float> rm,
-		       QList<uchar> pm)
+AnalyzePlugin::setMap(QList<float> rm,
+		  QList<uchar> pm)
 {
   m_rawMap = rm;
   m_pvlMap = pm;
-
-//  QString str;
-//  for(uint i=0; i<m_rawMap.size(); i++)
-//    {
-//      str += QString("%1 -> %2\n").\
-//	arg(m_rawMap[i]).arg(m_pvlMap[i]);
-//    }
-//  
-//  QMessageBox::information(0, "Map", str);
-}
-
-void RemapRawVolume::setVoxelType(int vt) { m_voxelType = vt; }
-void
-RemapRawVolume::setSkipHeaderBytes(int b)
-{
-  m_skipBytes = b;
-  m_headerBytes = b;
-}
-
-float RemapRawVolume::rawMin() { return m_rawMin; }
-float RemapRawVolume::rawMax() { return m_rawMax; }
-QList<uint> RemapRawVolume::histogram() { return m_histogram; }
-
-void
-RemapRawVolume::setGridSize(int d, int w, int h)
-{
-  m_depth = d;
-  m_width = w;
-  m_height = h;
 }
 
 void
-RemapRawVolume::gridSize(int& d, int& w, int& h)
+AnalyzePlugin::gridSize(int& d, int& w, int& h)
 {
   d = m_depth;
   w = m_width;
@@ -115,56 +93,127 @@ RemapRawVolume::gridSize(int& d, int& w, int& h)
 }
 
 void
-RemapRawVolume::replaceFile(QString flnm)
+AnalyzePlugin::replaceFile(QString flnm)
 {
   m_fileName.clear();
   m_fileName << flnm;
 }
 
 bool
-RemapRawVolume::setFile(QList<QString> fl)
+AnalyzePlugin::setFile(QStringList files)
 {
-  m_fileName = fl;
+  m_fileName = files;
 
-  int nX, nY, nZ;
-  {
-    // --- load various parameters from the raw file ---
-    LoadRawDialog loadRawDialog(0,
-				(char *)m_fileName[0].toAscii().data());
-    loadRawDialog.exec();
-    if (loadRawDialog.result() == QDialog::Rejected)
-      return false;
-
-    m_voxelType = loadRawDialog.voxelType();
-    m_skipBytes = loadRawDialog.skipHeaderBytes();
-    loadRawDialog.gridSize(nX, nY, nZ);
-    setGridSize(nX, nY, nZ);
-  }
-
-  //-----------------------------------
-  QFile fin(m_fileName[0]);
-  fin.open(QFile::ReadOnly);
-
-  //-- recheck the information (for backward compatibility) ----
-  if (m_skipBytes == 0)
+  if (checkExtension(files[0], "hdr"))
     {
-      int bpv = 1;
-      if (m_voxelType == _UChar) bpv = 1;
-      else if (m_voxelType == _Char) bpv = 1;
-      else if (m_voxelType == _UShort) bpv = 2;
-      else if (m_voxelType == _Short) bpv = 2;
-      else if (m_voxelType == _Int) bpv = 4;
-      else if (m_voxelType == _Float) bpv = 4;
-
-      if (fin.size() == 13+nX*nY*nZ*bpv)
-	m_skipBytes = 13;
-      else if (fin.size() == 12+nX*nY*nZ*bpv)
-	m_skipBytes = 12;
-      else
-	m_skipBytes = 0;
+      m_hdrFile = files[0];
+      m_imgFile = m_hdrFile;
+      m_imgFile.chop(3);
+      m_imgFile += "img";
     }
-  m_headerBytes = m_skipBytes;
+  else if (checkExtension(files[0], "img"))
+    {
+      m_imgFile = files[0];
+      m_hdrFile = m_imgFile;
+      m_hdrFile.chop(3);
+      m_hdrFile += "hdr";
+    }
+
+  QFile fin(m_hdrFile);
+  fin.open(QFile::ReadOnly);
+  fin.read((char*)&(m_analyzeHeader.hk), 40);
+  fin.read((char*)&(m_analyzeHeader.dime), 108);
+  fin.read((char*)&(m_analyzeHeader.hist), 200);
   fin.close();
+
+  m_byteSwap = false;
+  if (m_analyzeHeader.hk.sizeof_hdr != 348)
+    {
+      uchar *sptr = (uchar*)(& m_analyzeHeader.hk.sizeof_hdr);
+      swapbytes(sptr, 4);
+      if (m_analyzeHeader.hk.sizeof_hdr != 348)
+	{
+	  QMessageBox::information(0, "Error",
+	       QString("Header Size is not 348 : %1").\
+				   arg(m_analyzeHeader.hk.sizeof_hdr));
+	  return false;
+	}
+      else
+	{
+	  uchar *sptr;
+	  
+	  for(uint i=0; i<8; i++)
+	    {
+	      sptr = (uchar*) &(m_analyzeHeader.dime.dim[i]);
+	      swapbytes(sptr, 2);
+	    }
+	  
+	  for(uint i=0; i<8; i++)
+	    {
+	      sptr = (uchar*) &(m_analyzeHeader.dime.pixdim[i]);
+	      swapbytes(sptr, 4);
+	    }
+	  
+	  sptr = (uchar*) &(m_analyzeHeader.dime.datatype);
+	  swapbytes(sptr, 2);
+
+	  sptr = (uchar*) &(m_analyzeHeader.dime.bitpix);
+	  swapbytes(sptr, 2);
+
+	  m_byteSwap = true;
+	}
+      }
+  if (m_analyzeHeader.dime.datatype == 0)
+    {
+      if (m_analyzeHeader.dime.bitpix == 8)
+	m_voxelType = _UChar;
+      else if (m_analyzeHeader.dime.bitpix == 16)
+	m_voxelType = _Short;
+      else
+	{
+	  QStringList dtypes;
+	  dtypes << "Int"
+		 << "Float";
+      
+	  QString option = QInputDialog::getItem(0,
+						 "Data Type",
+	  "Img file does not specify data type. Please choose one. ",
+						 dtypes,
+						 0,
+						 false);
+	  
+	  if (option == "Int")
+	    m_voxelType = _Int;
+	  else if (option == "Float")
+	    m_voxelType = _Float;
+	}
+    }
+  else
+    {
+      if (m_analyzeHeader.dime.datatype == 2)
+	m_voxelType = _UChar;
+      else if (m_analyzeHeader.dime.datatype == 4)
+	m_voxelType = _Short;
+      else if (m_analyzeHeader.dime.datatype == 8)
+	m_voxelType = _Int;
+      else if (m_analyzeHeader.dime.datatype == 16)
+	m_voxelType = _Float;
+    }
+
+  if (m_voxelType == _UChar)
+    m_byteSwap = false;
+  
+  m_skipBytes = 0;
+  
+  m_depth = m_analyzeHeader.dime.dim[3];
+  m_width = m_analyzeHeader.dime.dim[2];
+  m_height = m_analyzeHeader.dime.dim[1];  
+
+  m_voxelSizeX = m_analyzeHeader.dime.pixdim[1];
+  m_voxelSizeY = m_analyzeHeader.dime.pixdim[2];
+  m_voxelSizeZ = m_analyzeHeader.dime.pixdim[3];
+
+  m_headerBytes = m_skipBytes;
   //------------------------------
 
   m_bytesPerVoxel = 1;
@@ -198,7 +247,7 @@ RemapRawVolume::setFile(QList<QString> fl)
 
 #define MINMAXANDHISTOGRAM()				\
   {							\
-    for(int j=0; j<nY*nZ; j++)				\
+    for(uint j=0; j<nY*nZ; j++)				\
       {							\
 	int val = ptr[j];				\
 	m_rawMin = qMin(m_rawMin, (float)val);		\
@@ -211,7 +260,7 @@ RemapRawVolume::setFile(QList<QString> fl)
 
 
 void
-RemapRawVolume::findMinMaxandGenerateHistogram()
+AnalyzePlugin::findMinMaxandGenerateHistogram()
 {
   QProgressDialog progress("Generating Histogram",
 			   "Cancel",
@@ -228,7 +277,7 @@ RemapRawVolume::findMinMaxandGenerateHistogram()
       if (m_voxelType == _UChar) rMin = 0;
       if (m_voxelType == _Char) rMin = -127;
       rSize = 255;
-      for(int i=0; i<256; i++)
+      for(uint i=0; i<256; i++)
 	m_histogram.append(0);
     }
   else if (m_voxelType == _UShort ||
@@ -237,7 +286,7 @@ RemapRawVolume::findMinMaxandGenerateHistogram()
       if (m_voxelType == _UShort) rMin = 0;
       if (m_voxelType == _Short) rMin = -32767;
       rSize = 65536;
-      for(int i=0; i<65536; i++)
+      for(uint i=0; i<65536; i++)
 	m_histogram.append(0);
     }
   else
@@ -245,16 +294,6 @@ RemapRawVolume::findMinMaxandGenerateHistogram()
       QMessageBox::information(0, "Error", "Why am i here ???");
       return;
     }
-
-  //==================
-  // do not calculate histogram
-  if (m_voxelType == _UChar)
-    {
-      m_rawMin = 0;
-      m_rawMax = 255;
-      return;
-    }
-  //==================
 
   int nX, nY, nZ;
   nX = m_depth;
@@ -264,18 +303,21 @@ RemapRawVolume::findMinMaxandGenerateHistogram()
   int nbytes = nY*nZ*m_bytesPerVoxel;
   uchar *tmp = new uchar[nbytes];
 
-  QFile fin(m_fileName[0]);
+  QFile fin(m_imgFile);
   fin.open(QFile::ReadOnly);
   fin.seek(m_skipBytes);
 
   m_rawMin = 10000000;
   m_rawMax = -10000000;
-  for(int i=0; i<nX; i++)
+  for(uint i=0; i<nX; i++)
     {
       progress.setValue((int)(100.0*(float)i/(float)nX));
       qApp->processEvents();
 
       fin.read((char*)tmp, nbytes);
+
+      if (m_byteSwap && m_bytesPerVoxel > 1)
+	swapbytes(tmp, m_bytesPerVoxel, nbytes);      
 
       if (m_voxelType == _UChar)
 	{
@@ -324,7 +366,7 @@ RemapRawVolume::findMinMaxandGenerateHistogram()
 
 #define FINDMINMAX()					\
   {							\
-    for(int j=0; j<nY*nZ; j++)				\
+    for(uint j=0; j<nY*nZ; j++)				\
       {							\
 	float val = ptr[j];				\
 	m_rawMin = qMin(m_rawMin, val);			\
@@ -333,7 +375,7 @@ RemapRawVolume::findMinMaxandGenerateHistogram()
   }
 
 void
-RemapRawVolume::findMinMax()
+AnalyzePlugin::findMinMax()
 {
   QProgressDialog progress("Finding Min and Max",
 			   "Cancel",
@@ -350,18 +392,21 @@ RemapRawVolume::findMinMax()
   int nbytes = nY*nZ*m_bytesPerVoxel;
   uchar *tmp = new uchar[nbytes];
 
-  QFile fin(m_fileName[0]);
+  QFile fin(m_imgFile);
   fin.open(QFile::ReadOnly);
   fin.seek(m_skipBytes);
 
   m_rawMin = 10000000;
   m_rawMax = -10000000;
-  for(int i=0; i<nX; i++)
+  for(uint i=0; i<nX; i++)
     {
       progress.setValue((int)(100.0*(float)i/(float)nX));
       qApp->processEvents();
 
       fin.read((char*)tmp, nbytes);
+
+      if (m_byteSwap && m_bytesPerVoxel > 1)
+	swapbytes(tmp, m_bytesPerVoxel, nbytes);      
 
       if (m_voxelType == _UChar)
 	{
@@ -404,7 +449,7 @@ RemapRawVolume::findMinMax()
 
 #define GENHISTOGRAM()					\
   {							\
-    for(int j=0; j<nY*nZ; j++)				\
+    for(uint j=0; j<nY*nZ; j++)				\
       {							\
 	float fidx = (ptr[j]-m_rawMin)/rSize;		\
 	fidx = qBound(0.0f, fidx, 1.0f);		\
@@ -414,7 +459,7 @@ RemapRawVolume::findMinMax()
   }
 
 void
-RemapRawVolume::generateHistogram()
+AnalyzePlugin::generateHistogram()
 {
   QProgressDialog progress("Generating Histogram",
 			   "Cancel",
@@ -424,6 +469,7 @@ RemapRawVolume::generateHistogram()
 
 
   float rSize = m_rawMax-m_rawMin;
+
   int nX, nY, nZ;
   nX = m_depth;
   nY = m_width;
@@ -432,7 +478,7 @@ RemapRawVolume::generateHistogram()
   int nbytes = nY*nZ*m_bytesPerVoxel;
   uchar *tmp = new uchar[nbytes];
 
-  QFile fin(m_fileName[0]);
+  QFile fin(m_imgFile);
   fin.open(QFile::ReadOnly);
   fin.seek(m_skipBytes);
 
@@ -442,23 +488,25 @@ RemapRawVolume::generateHistogram()
       m_voxelType == _UShort ||
       m_voxelType == _Short)
     {
-      for(int i=0; i<rSize+1; i++)
+      for(uint i=0; i<rSize+1; i++)
 	m_histogram.append(0);
     }
   else
     {      
-      for(int i=0; i<65536; i++)
+      for(uint i=0; i<65536; i++)
 	m_histogram.append(0);
     }
 
   int histogramSize = m_histogram.size()-1;
-  for(int i=0; i<nX; i++)
+  for(uint i=0; i<nX; i++)
     {
       progress.setValue((int)(100.0*(float)i/(float)nX));
       qApp->processEvents();
 
-
       fin.read((char*)tmp, nbytes);
+
+      if (m_byteSwap && m_bytesPerVoxel > 1)
+	swapbytes(tmp, m_bytesPerVoxel, nbytes);      
 
       if (m_voxelType == _UChar)
 	{
@@ -507,20 +555,25 @@ RemapRawVolume::generateHistogram()
   qApp->processEvents();
 }
 
+
 void
-RemapRawVolume::getDepthSlice(int slc,
-			      uchar *slice)
+AnalyzePlugin::getDepthSlice(int slc,
+			    uchar *slice)
 {
   int nbytes = m_width*m_height*m_bytesPerVoxel;
-  QFile fin(m_fileName[0]);
+
+  QFile fin(m_imgFile);
   fin.open(QFile::ReadOnly);
   fin.seek(m_skipBytes + nbytes*slc);
   fin.read((char*)slice, nbytes);
   fin.close();
+
+  if (m_byteSwap && m_bytesPerVoxel > 1)
+    swapbytes(slice, m_bytesPerVoxel, nbytes);      
 }
 
 QImage
-RemapRawVolume::getDepthSliceImage(int slc)
+AnalyzePlugin::getDepthSliceImage(int slc)
 {
   int nX, nY, nZ;
   nX = m_depth;
@@ -535,16 +588,19 @@ RemapRawVolume::getDepthSliceImage(int slc)
   m_image = new uchar[nY*nZ];
 
 
-  QFile fin(m_fileName[0]);
+  QFile fin(m_imgFile);
   fin.open(QFile::ReadOnly);
   fin.seek(m_skipBytes + nbytes*slc);
   fin.read((char*)tmp, nbytes);
   fin.close();
 
+  if (m_byteSwap && m_bytesPerVoxel > 1)
+    swapbytes(tmp, m_bytesPerVoxel, nbytes);      
+
   int rawSize = m_rawMap.size()-1;
-  for(int i=0; i<nY*nZ; i++)
+  for(uint i=0; i<nY*nZ; i++)
     {
-      int idx = 0;
+      int idx = m_rawMap.size()-1;
       float frc = 0;
       float v;
 
@@ -571,13 +627,9 @@ RemapRawVolume::getDepthSliceImage(int slc)
 	  idx = rawSize-1;
 	  frc = 1;
 	}
-      else if (ISNAN(v)) 
-	{
-	  idx = 0;
-	}
       else
 	{
-	  for(int m=0; m<rawSize; m++)
+	  for(uint m=0; m<rawSize; m++)
 	    {
 	      if (v >= m_rawMap[m] &&
 		  v <= m_rawMap[m+1])
@@ -600,7 +652,7 @@ RemapRawVolume::getDepthSliceImage(int slc)
 }
 
 QImage
-RemapRawVolume::getWidthSliceImage(int slc)
+AnalyzePlugin::getWidthSliceImage(int slc)
 {
   int nX, nY, nZ;
   nX = m_depth;
@@ -620,22 +672,25 @@ RemapRawVolume::getWidthSliceImage(int slc)
   int nbytes = nX*nZ*m_bytesPerVoxel;
   uchar *tmp = new uchar[nbytes];
 
-  QFile fin(m_fileName[0]);
+  QFile fin(m_imgFile);
   fin.open(QFile::ReadOnly);
 
-  for(int k=0; k<nX; k++)
+  for(uint k=0; k<nX; k++)
     {
       fin.seek(m_skipBytes +
 	       (slc*nZ + k*nY*nZ)*m_bytesPerVoxel);
 
       fin.read((char*)(tmp+k*nZ*m_bytesPerVoxel),
 	       nZ*m_bytesPerVoxel);
+
     }
   fin.close();
 
+  if (m_byteSwap && m_bytesPerVoxel > 1)
+    swapbytes(tmp, m_bytesPerVoxel, nbytes);      
 
   int rawSize = m_rawMap.size()-1;
-  for(int i=0; i<nX*nZ; i++)
+  for(uint i=0; i<nX*nZ; i++)
     {
       int idx = m_rawMap.size()-1;
       float frc = 0;
@@ -666,7 +721,7 @@ RemapRawVolume::getWidthSliceImage(int slc)
 	}
       else
 	{
-	  for(int m=0; m<rawSize; m++)
+	  for(uint m=0; m<rawSize; m++)
 	    {
 	      if (v >= m_rawMap[m] &&
 		  v <= m_rawMap[m+1])
@@ -689,7 +744,7 @@ RemapRawVolume::getWidthSliceImage(int slc)
 }
 
 QImage
-RemapRawVolume::getHeightSliceImage(int slc)
+AnalyzePlugin::getHeightSliceImage(int slc)
 {
   int nX, nY, nZ;
   nX = m_depth;
@@ -709,18 +764,17 @@ RemapRawVolume::getHeightSliceImage(int slc)
   int nbytes = nX*nY*m_bytesPerVoxel;
   uchar *tmp = new uchar[nbytes];
 
-  QFile fin(m_fileName[0]);
+  QFile fin(m_imgFile);
   fin.open(QFile::ReadOnly);
-  fin.seek(m_skipBytes);
 
   int ndum = nY*nZ*m_bytesPerVoxel;
   uchar *dum = new uchar[ndum];
   
-  int it=0;
-  for(int k=0; k<nX; k++)
+  uint it=0;
+  for(uint k=0; k<nX; k++)
     {
       fin.read((char*)dum, ndum);
-      for(int j=0; j<nY; j++)
+      for(uint j=0; j<nY; j++)
 	{
 	  memcpy(tmp+it*m_bytesPerVoxel,
 		 dum+(j*nZ+slc)*m_bytesPerVoxel,
@@ -731,9 +785,11 @@ RemapRawVolume::getHeightSliceImage(int slc)
   delete [] dum;
   fin.close();
 
+  if (m_byteSwap && m_bytesPerVoxel > 1)
+    swapbytes(tmp, m_bytesPerVoxel, nbytes);      
 
   int rawSize = m_rawMap.size()-1;
-  for(int i=0; i<nX*nY; i++)
+  for(uint i=0; i<nX*nY; i++)
     {
       int idx = m_rawMap.size()-1;
       float frc = 0;
@@ -764,7 +820,7 @@ RemapRawVolume::getHeightSliceImage(int slc)
 	}
       else
 	{
-	  for(int m=0; m<rawSize; m++)
+	  for(uint m=0; m<rawSize; m++)
 	    {
 	      if (v >= m_rawMap[m] &&
 		  v <= m_rawMap[m+1])
@@ -787,7 +843,7 @@ RemapRawVolume::getHeightSliceImage(int slc)
 }
 
 QPair<QVariant, QVariant>
-RemapRawVolume::rawValue(int d, int w, int h)
+AnalyzePlugin::rawValue(int d, int w, int h)
 {
   QPair<QVariant, QVariant> pair;
 
@@ -800,7 +856,7 @@ RemapRawVolume::rawValue(int d, int w, int h)
       return pair;
     }
 
-  QFile fin(m_fileName[0]);
+  QFile fin(m_imgFile);
   fin.open(QFile::ReadOnly);
   fin.seek(m_skipBytes +
 	   m_bytesPerVoxel*(d*m_width*m_height +
@@ -825,24 +881,44 @@ RemapRawVolume::rawValue(int d, int w, int h)
     {
       unsigned short a;
       fin.read((char*)&a, m_bytesPerVoxel);
+      if (m_byteSwap)
+	{
+	  uchar *sptr = (uchar*)(&a);
+	  swapbytes(sptr, 2);
+	}
       v = QVariant((uint)a);
     }
   else if (m_voxelType == _Short)
     {
       short a;
       fin.read((char*)&a, m_bytesPerVoxel);
+      if (m_byteSwap)
+	{
+	  uchar *sptr = (uchar*)(&a);
+	  swapbytes(sptr, 2);
+	}
       v = QVariant((int)a);
     }
   else if (m_voxelType == _Int)
     {
       int a;
       fin.read((char*)&a, m_bytesPerVoxel);
+      if (m_byteSwap)
+	{
+	  uchar *sptr = (uchar*)(&a);
+	  swapbytes(sptr, 4);
+	}
       v = QVariant((int)a);
     }
   else if (m_voxelType == _Float)
     {
       float a;
       fin.read((char*)&a, m_bytesPerVoxel);
+      if (m_byteSwap)
+	{
+	  uchar *sptr = (uchar*)(&a);
+	  swapbytes(sptr, 4);
+	}
       v = QVariant((double)a);
     }
   fin.close();
@@ -872,7 +948,7 @@ RemapRawVolume::rawValue(int d, int w, int h)
     }
   else
     {
-      for(int m=0; m<rawSize; m++)
+      for(uint m=0; m<rawSize; m++)
 	{
 	  if (val >= m_rawMap[m] &&
 	      val <= m_rawMap[m+1])
@@ -892,10 +968,10 @@ RemapRawVolume::rawValue(int d, int w, int h)
 }
 
 void
-RemapRawVolume::saveTrimmed(QString trimFile,
-			    int dmin, int dmax,
-			    int wmin, int wmax,
-			    int hmin, int hmax)
+AnalyzePlugin::saveTrimmed(QString trimFile,
+			   int dmin, int dmax,
+			   int wmin, int wmax,
+			   int hmin, int hmax)
 {
   QProgressDialog progress("Saving trimmed volume",
 			   "Cancel",
@@ -932,21 +1008,26 @@ RemapRawVolume::saveTrimmed(QString trimFile,
   fout.write((char*)&mY, 4);
   fout.write((char*)&mZ, 4);
 
-  QFile fin(m_fileName[0]);
+  QFile fin(m_imgFile);
   fin.open(QFile::ReadOnly);
   fin.seek(m_skipBytes + nbytes*dmin);
 
-  for(int i=dmin; i<=dmax; i++)
+  for(uint i=dmin; i<=dmax; i++)
     {
       fin.read((char*)tmp, nbytes);
 
-      for(int j=wmin; j<=wmax; j++)
+      for(uint j=wmin; j<=wmax; j++)
 	{
 	  memcpy(tmp+(j-wmin)*mZ*m_bytesPerVoxel,
 		 tmp+(j*nZ + hmin)*m_bytesPerVoxel,
 		 mZ*m_bytesPerVoxel);
 	}
 	  
+      if (m_byteSwap && m_bytesPerVoxel > 1)
+	swapbytes(tmp,
+		  m_bytesPerVoxel,
+		  mY*mZ*m_bytesPerVoxel);      
+
       fout.write((char*)tmp, mY*mZ*m_bytesPerVoxel);
 
       progress.setValue((int)(100*(float)(i-dmin)/(float)mX));
@@ -961,5 +1042,55 @@ RemapRawVolume::saveTrimmed(QString trimFile,
   m_headerBytes = 13; // to be used for applyMapping function
 }
 
+bool
+AnalyzePlugin::checkExtension(QString flnm, const char *ext)
+{
+  bool ok = true;
+  int extlen = strlen(ext);
+
+  QFileInfo info(flnm);
+  if (info.exists() && info.isFile())
+    {
+      QByteArray exten = flnm.toAscii().right(extlen);
+      if (exten != ext)
+	ok = false;
+    }
+  else
+    ok = false;
+
+  return ok;
+}
+
+void
+AnalyzePlugin::swapbytes(uchar *ptr, int nbytes)
+{
+  for(uint i=0; i<nbytes/2; i++)
+    {
+      uchar t;
+      t = ptr[i];
+      ptr[i] = ptr[nbytes-1-i];
+      ptr[nbytes-1-i] = t;
+    }
+}
+
+void
+AnalyzePlugin::swapbytes(uchar *ptr, int bpv, int nbytes)
+{
+  int nb = nbytes/bpv;
+  for(uint j=0; j<nb; j++)
+    {
+      uchar *p = ptr + bpv*j;
+      for(uint i=0; i<bpv/2; i++)
+	{
+	  uchar t;
+	  t = p[i];
+	  p[i] = p[bpv-1-i];
+	  p[bpv-1-i] = t;
+	}
+    }
+
+}
+
 //-------------------------------
 //-------------------------------
+Q_EXPORT_PLUGIN2(analyzeplugin, AnalyzePlugin);

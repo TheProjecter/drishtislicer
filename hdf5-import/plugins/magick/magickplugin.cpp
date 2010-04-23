@@ -1,42 +1,44 @@
-#include "remapdicomvolume.h"
-
-#include <string>
+#include <QtGui>
+#include "common.h"
+#include "magickplugin.h"
 
 #include <Magick++.h>
 using namespace std;
 using namespace Magick;
 
-
-RemapDicomVolume::RemapDicomVolume()
+void
+MagickPlugin::init()
 {
   m_fileName.clear();
   m_imageList.clear();
 
+  m_description.clear();
   m_depth = m_width = m_height = 0;
-  m_headerBytes = 0;
   m_voxelType = _UChar;
+  m_voxelUnit = _Micron;
+  m_voxelSizeX = m_voxelSizeY = m_voxelSizeZ = 1;
   m_bytesPerVoxel = 1;
-
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
 
   m_rawMap.clear();
   m_pvlMap.clear();
 
-
   m_image = 0;
 }
 
-RemapDicomVolume::~RemapDicomVolume()
+void
+MagickPlugin::clear()
 {
   m_fileName.clear();
   m_imageList.clear();
 
+  m_description.clear();
   m_depth = m_width = m_height = 0;
-  m_headerBytes = 0;
   m_voxelType = _UChar;
+  m_voxelUnit = _Micron;
+  m_voxelSizeX = m_voxelSizeY = m_voxelSizeZ = 1;
   m_bytesPerVoxel = 1;
-
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
 
@@ -49,28 +51,39 @@ RemapDicomVolume::~RemapDicomVolume()
 }
 
 void
-RemapDicomVolume::setMinMax(float rmin, float rmax)
+MagickPlugin::voxelSize(float& vx, float& vy, float& vz)
+  {
+    vx = m_voxelSizeX;
+    vy = m_voxelSizeY;
+    vz = m_voxelSizeZ;
+  }
+QString MagickPlugin::description() { return m_description; }
+int MagickPlugin::voxelType() { return m_voxelType; }
+int MagickPlugin::voxelUnit() { return m_voxelUnit; }
+int MagickPlugin::headerBytes() { return m_headerBytes; }
+
+void
+MagickPlugin::setMinMax(float rmin, float rmax)
 {
   m_rawMin = rmin;
   m_rawMax = rmax;
-  
-  //generateHistogram();
 }
+float MagickPlugin::rawMin() { return m_rawMin; }
+float MagickPlugin::rawMax() { return m_rawMax; }
+QList<uint> MagickPlugin::histogram() { return m_histogram; }
+QList<float> MagickPlugin::rawMap() { return m_rawMap; }
+QList<uchar> MagickPlugin::pvlMap() { return m_pvlMap; }
 
 void
-RemapDicomVolume::setMap(QList<float> rm,
-			 QList<uchar> pm)
+MagickPlugin::setMap(QList<float> rm,
+		  QList<uchar> pm)
 {
   m_rawMap = rm;
   m_pvlMap = pm;
 }
 
-float RemapDicomVolume::rawMin() { return m_rawMin; }
-float RemapDicomVolume::rawMax() { return m_rawMax; }
-QList<uint> RemapDicomVolume::histogram() { return m_histogram; }
-
 void
-RemapDicomVolume::gridSize(int& d, int& w, int& h)
+MagickPlugin::gridSize(int& d, int& w, int& h)
 {
   d = m_depth;
   w = m_width;
@@ -101,7 +114,7 @@ class tag
 };
 
 void
-RemapDicomVolume::getFileList(QList<QString> files)
+MagickPlugin::getFileList(QList<QString> files)
 {
   QProgressDialog progress("Enumerating files - may take some time...",
 			   0,
@@ -160,23 +173,30 @@ RemapDicomVolume::getFileList(QList<QString> files)
   qApp->processEvents();
 }
 
-bool
-RemapDicomVolume::setFile(QList<QString> fl)
+void
+MagickPlugin::replaceFile(QString flnm)
 {
-  m_imageList.clear();
+  m_fileName.clear();
+  m_fileName << flnm;
+}
 
-  m_fileName = fl;
+bool
+MagickPlugin::setFile(QStringList files)
+{
+  m_fileName = files;
+
+  m_imageList.clear();
 
   // list all image files in the directory
   QStringList imageNameFilter;
   imageNameFilter << "*";
-  QStringList files= QDir(m_fileName[0]).entryList(imageNameFilter,
-						   QDir::NoSymLinks|
-						   QDir::NoDotAndDotDot|
-						   QDir::Readable|
-						   QDir::Files);
+  QStringList imgfiles= QDir(m_fileName[0]).entryList(imageNameFilter,
+						      QDir::NoSymLinks|
+						      QDir::NoDotAndDotDot|
+						      QDir::Readable|
+						      QDir::Files);
 
-  getFileList(files);
+  getFileList(imgfiles);
 
   m_depth = m_imageList.size();
   Image image((char*)m_imageList[0].toAscii().data());
@@ -204,14 +224,13 @@ RemapDicomVolume::setFile(QList<QString> fl)
       m_voxelType == _Char ||
       m_voxelType == _UShort ||
       m_voxelType == _Short)
+    findMinMaxandGenerateHistogram();
+  else
     {
-      findMinMaxandGenerateHistogram();
+      QMessageBox::information(0, "Error",
+			       "Currently accepting only 1- and 2-byte images");
+      return false;
     }
-//  else
-//    {
-//      findMinMax();
-//      generateHistogram();
-//    }
 
   m_rawMap.append(m_rawMin);
   m_rawMap.append(m_rawMax);
@@ -236,7 +255,7 @@ RemapDicomVolume::setFile(QList<QString> fl)
 
 
 void
-RemapDicomVolume::findMinMaxandGenerateHistogram()
+MagickPlugin::findMinMaxandGenerateHistogram()
 {
   QProgressDialog progress("Generating Histogram",
 			   0,
@@ -340,8 +359,8 @@ RemapDicomVolume::findMinMaxandGenerateHistogram()
 }
 
 void
-RemapDicomVolume::getDepthSlice(int slc,
-				uchar *slice)
+MagickPlugin::getDepthSlice(int slc,
+			    uchar *slice)
 {
   int nbytes = m_width*m_height*m_bytesPerVoxel;
 
@@ -387,7 +406,7 @@ RemapDicomVolume::getDepthSlice(int slc,
 }
 
 QImage
-RemapDicomVolume::getDepthSliceImage(int slc)
+MagickPlugin::getDepthSliceImage(int slc)
 {
   if (m_image)
     delete [] m_image;
@@ -490,7 +509,7 @@ RemapDicomVolume::getDepthSliceImage(int slc)
 }
 
 QImage
-RemapDicomVolume::getWidthSliceImage(int slc)
+MagickPlugin::getWidthSliceImage(int slc)
 {
   if (m_image)
     delete [] m_image;
@@ -605,7 +624,7 @@ RemapDicomVolume::getWidthSliceImage(int slc)
 }
 
 QImage
-RemapDicomVolume::getHeightSliceImage(int slc)
+MagickPlugin::getHeightSliceImage(int slc)
 {
   if (m_image)
     delete [] m_image;
@@ -719,7 +738,7 @@ RemapDicomVolume::getHeightSliceImage(int slc)
 }
 
 QPair<QVariant, QVariant>
-RemapDicomVolume::rawValue(int d, int w, int h)
+MagickPlugin::rawValue(int d, int w, int h)
 {
   QPair<QVariant, QVariant> pair;
 
@@ -811,7 +830,7 @@ RemapDicomVolume::rawValue(int d, int w, int h)
 }
 
 void
-RemapDicomVolume::saveTrimmed(QString trimFile,
+MagickPlugin::saveTrimmed(QString trimFile,
 			    int dmin, int dmax,
 			    int wmin, int wmax,
 			    int hmin, int hmax)
@@ -915,3 +934,7 @@ RemapDicomVolume::saveTrimmed(QString trimFile,
 
   m_headerBytes = 13; // to be used for applyMapping function
 }
+
+//-------------------------------
+//-------------------------------
+Q_EXPORT_PLUGIN2(magickplugin, MagickPlugin);

@@ -1,8 +1,13 @@
 #include "gradienteditor.h"
 #include "dcolordialog.h"
+#include "global.h"
+
+#include <QFile>
+#include <QTextStream>
+#include <QDomDocument>
 
 
-uint GradientEditor::border() const { return m_border; }
+int GradientEditor::border() const { return m_border; }
 void GradientEditor::setBorder(const int border) { m_border = border; }
 
 QSizeF GradientEditor::pointSize() const { return m_pointSize; }
@@ -418,4 +423,317 @@ GradientEditor::mousePressEvent(QMouseEvent *event)
 	}
     }
   
+}
+void GradientEditor::enterEvent(QEvent *e) { grabKeyboard(); }
+void GradientEditor::leaveEvent(QEvent *e) { releaseKeyboard(); }
+
+void
+GradientEditor::keyPressEvent(QKeyEvent *event)
+{
+  if (event->key() == Qt::Key_Space)
+    {      
+      askGradientChoice();
+      update();
+    }
+  else if (event->key() == Qt::Key_S)
+    {      
+      saveGradientStops();      
+    }
+  else if (event->key() == Qt::Key_F)
+    {      
+      flipGradientStops();
+    }
+  else if (event->key() == Qt::Key_Up)
+    {      
+     scaleOpacity(1.25f);
+    }
+  else if (event->key() == Qt::Key_Down)
+    {      
+     scaleOpacity(0.8f);
+    }
+}
+
+
+void
+GradientEditor::scaleOpacity(float factor)
+{
+  QGradientStops origstops = gradientStops();
+  QGradientStops stops;
+
+  int npts = origstops.count();
+  for(int i=0; i<npts; i++)
+    {
+      float pos = origstops.at(i).first;
+      QColor col = origstops.at(i).second;
+      int r = col.red();
+      int g = col.green();
+      int b = col.blue();
+      int a = col.alpha();
+      a = qBound(0, int(a*factor), 255);
+      stops << QGradientStop(pos, QColor(r,g,b,a));
+    }
+
+  setGradientStops(stops);
+  emit gradientChanged();
+}
+
+void
+GradientEditor::flipGradientStops()
+{
+  QGradientStops origstops = gradientStops();
+  QGradientStops stops;
+
+  int npts = origstops.count();
+  for(int i=npts-1; i>=0; i--)
+    {
+      float pos = 1.0 - origstops.at(i).first;
+      QColor col = origstops.at(i).second;
+      stops << QGradientStop(pos, col);
+    }
+
+  setGradientStops(stops);
+  emit gradientChanged();
+}
+
+void
+GradientEditor::copyGradientFile(QString stopsflnm)
+{
+  QString sflnm = ":/images/gradientstops.xml";
+  QFileInfo fi(sflnm);
+  if (! fi.exists())
+    {
+      QMessageBox::information(0, "Gradient Stops",
+			       QString("Gradient Stops file does not exit at %1").arg(sflnm));
+      
+      return;
+    }
+
+  // copy information from gradientstops.xml to HOME/.drishtigradients.xml
+  QDomDocument document;
+  QFile f(sflnm);
+  if (f.open(QIODevice::ReadOnly))
+    {
+      document.setContent(&f);
+      f.close();
+    }
+  
+  QFile fout(stopsflnm);
+  if (fout.open(QIODevice::WriteOnly))
+    {
+      QTextStream out(&fout);
+      document.save(out, 2);
+      fout.close();
+    }
+}
+
+void
+GradientEditor::askGradientChoice()
+{
+  QString homePath = QDir::homePath();
+  QFileInfo sfi(homePath, ".drishtigradients.xml");
+  QString stopsflnm = sfi.absoluteFilePath();
+  if (!sfi.exists())
+    copyGradientFile(stopsflnm);
+
+  QDomDocument document;
+  QFile f(stopsflnm);
+  if (f.open(QIODevice::ReadOnly))
+    {
+      document.setContent(&f);
+      f.close();
+    }
+
+  QStringList glist;
+
+  QDomElement main = document.documentElement();
+  QDomNodeList dlist = main.childNodes();
+  for(int i=0; i<dlist.count(); i++)
+    {
+      if (dlist.at(i).nodeName() == "gradient")
+	{
+	  QDomNodeList cnode = dlist.at(i).childNodes();
+	  for(int j=0; j<cnode.count(); j++)
+	    {
+	      QDomElement dnode = cnode.at(j).toElement();
+	      if (dnode.nodeName() == "name")
+		glist << dnode.text();
+	    }
+	}
+    }
+
+  bool ok;
+  QString gstr = QInputDialog::getItem(0,
+				       "Color Gradient",
+				       "Color Gradient",
+				       glist, 0, false,
+				       &ok);
+  if (!ok)
+    return;
+
+  int cno = -1;
+  for(int i=0; i<dlist.count(); i++)
+    {
+      if (dlist.at(i).nodeName() == "gradient")
+	{
+	  QDomNodeList cnode = dlist.at(i).childNodes();
+	  for(int j=0; j<cnode.count(); j++)
+	    {
+	      QDomElement dnode = cnode.at(j).toElement();
+	      if (dnode.tagName() == "name" && dnode.text() == gstr)
+		{
+		  cno = i;
+		  break;
+		}
+	    }
+	}
+    }
+	
+  if (cno < 0)
+    return;
+
+  QGradientStops stops;
+  QDomNodeList cnode = dlist.at(cno).childNodes();
+  for(int j=0; j<cnode.count(); j++)
+    {
+      QDomElement de = cnode.at(j).toElement();
+      if (de.tagName() == "gradientstops")
+	{
+	  QString str = de.text();
+	  QStringList strlist = str.split(" ", QString::SkipEmptyParts);
+	  for(int j=0; j<strlist.count()/5; j++)
+	    {
+	      float pos, r,g,b,a;
+	      pos = strlist[5*j].toFloat();
+	      r = strlist[5*j+1].toInt();
+	      g = strlist[5*j+2].toInt();
+	      b = strlist[5*j+3].toInt();
+	      a = strlist[5*j+4].toInt();
+	      stops << QGradientStop(pos, QColor(r,g,b,a));
+	    }
+	}
+    }
+  setGradientStops(stops);
+  emit gradientChanged();
+}
+
+void
+GradientEditor::saveGradientStops()
+{
+  QString gname;
+  bool ok;
+  QString text;
+  text = QInputDialog::getText(this,
+			      "Save Gradient Stops",
+			      "Name for the stops",
+			      QLineEdit::Normal,
+			      "",
+			      &ok);
+  
+  if (ok && !text.isEmpty())
+    gname = text;
+  else
+    {
+      QMessageBox::information(0, "Save Gradient Stops",
+			       "Please specify name for the gradient stops");
+      return;
+    }
+
+  QString homePath = QDir::homePath();
+  QFileInfo sfi(homePath, ".drishtigradients.xml");
+  QString stopsflnm = sfi.absoluteFilePath();
+  if (!sfi.exists())
+    copyGradientFile(stopsflnm);
+
+  QDomDocument doc;
+  QFile f(stopsflnm);
+  if (f.open(QIODevice::ReadOnly))
+    {
+      doc.setContent(&f);
+      f.close();
+    }
+
+  //-------------------------------------------------
+  QDomElement de = doc.createElement("gradient");
+  QDomElement de0 = doc.createElement("name");
+  QDomElement de1 = doc.createElement("gradientstops");
+  QDomText tn0 = doc.createTextNode(gname);
+  QString str;
+  for(int i=0; i<m_points.count(); i++)
+    {
+      float pos;
+      int r,g,b,a;
+      QPointF pt;
+      pt = m_points[i];      
+      pos = pt.x();      
+      a = 255*(1-pt.y());
+      r = m_colors[i].red();
+      g = m_colors[i].green();
+      b = m_colors[i].blue();
+
+      str += QString("%1 %2 %3 %4 %5   ").arg(pos). \
+	                arg(r).arg(g).arg(b).arg(a);
+    }
+  QDomText tn1 = doc.createTextNode(str);
+  de0.appendChild(tn0);
+  de1.appendChild(tn1);
+  de.appendChild(de0);
+  de.appendChild(de1);
+  //-------------------------------------------------
+
+
+
+  QDomElement topElement = doc.documentElement();
+
+  int replace = -1;
+  QDomNodeList dlist = topElement.childNodes();
+  for(int i=0; i<dlist.count(); i++)
+    {
+      if (dlist.at(i).nodeName() == "gradient")
+	{
+	  QDomNodeList cnode = dlist.at(i).childNodes();
+	  for(int j=0; j<cnode.count(); j++)
+	    {
+	      QDomElement dnode = cnode.at(j).toElement();
+	      if (dnode.nodeName() == "name" &&
+		  dnode.text() == gname)
+		{
+		  replace = i;
+		  break;
+		}
+	    }
+	}
+    }
+
+  if (replace >= 0)
+    {
+      QStringList items;
+      items << "Yes";
+      items << "No";
+      bool ok;
+      QString str;
+      str = QInputDialog::getItem(0,
+				  "Replace existing gradient stops",
+				  QString("Replace %1").arg(gname),
+				  items,
+				  0,
+				  false, // text is not editable
+				  &ok);
+      if (!ok || str == "No")
+	return;
+
+      topElement.replaceChild(de, dlist.at(replace));
+    }
+  else
+    topElement.appendChild(de);
+
+
+  QFile fout(stopsflnm);
+  if (fout.open(QIODevice::WriteOnly))
+    {
+      QTextStream out(&fout);
+      doc.save(out, 2);
+      fout.close();
+    }
+
+  QMessageBox::information(0, "Save Gradient Stops", "Saved");
 }

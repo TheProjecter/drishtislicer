@@ -1,36 +1,21 @@
-
-#include <math.h>
-
-#include "remaprawslabs.h"
+#include <QtGui>
+#include "common.h"
+#include "rawslabsplugin.h"
 #include "loadrawdialog.h"
 
-#include <cmath>
-
-#ifdef Q_WS_WIN
-#include <float.h>
-#define ISNAN(v) _isnan(v)
-#else
-#ifdef Q_WS_MAC
-static int isnan(float x)
-{
-  return x != x;
-}
-#define ISNAN(v) isnan(v)
-#else
-#define ISNAN(v) isnan(v)
-#endif // __apple__
-#endif
-
-
-RemapRawSlabs::RemapRawSlabs()
+void
+RawSlabsPlugin::init()
 {
   m_fileName.clear();
-  m_depth = m_width = m_height = 0;
-  m_skipBytes = 0;
-  m_headerBytes = 0;
-  m_voxelType = _UChar;
-  m_bytesPerVoxel = 1;
+  m_slices.clear();
 
+  m_description.clear();
+  m_depth = m_width = m_height = 0;
+  m_voxelType = _UChar;
+  m_voxelUnit = _Micron;
+  m_voxelSizeX = m_voxelSizeY = m_voxelSizeZ = 1;
+  m_skipBytes = 0;
+  m_bytesPerVoxel = 1;
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
 
@@ -38,19 +23,21 @@ RemapRawSlabs::RemapRawSlabs()
   m_pvlMap.clear();
 
   m_image = 0;
-
-  m_slices.clear();
 }
 
-RemapRawSlabs::~RemapRawSlabs()
+void
+RawSlabsPlugin::clear()
 {
   m_fileName.clear();
-  m_depth = m_width = m_height = 0;
-  m_skipBytes = 0;
-  m_headerBytes = 0;
-  m_voxelType = _UChar;
-  m_bytesPerVoxel = 1;
+  m_slices.clear();
 
+  m_description.clear();
+  m_depth = m_width = m_height = 0;
+  m_voxelType = _UChar;
+  m_voxelUnit = _Micron;
+  m_voxelSizeX = m_voxelSizeY = m_voxelSizeZ = 1;
+  m_skipBytes = 0;
+  m_bytesPerVoxel = 1;
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
 
@@ -60,73 +47,66 @@ RemapRawSlabs::~RemapRawSlabs()
   if (m_image)
     delete [] m_image;
   m_image = 0;
-
-  m_slices.clear();
 }
 
 void
-RemapRawSlabs::setMinMax(float rmin, float rmax)
+RawSlabsPlugin::voxelSize(float& vx, float& vy, float& vz)
+  {
+    vx = m_voxelSizeX;
+    vy = m_voxelSizeY;
+    vz = m_voxelSizeZ;
+  }
+QString RawSlabsPlugin::description() { return m_description; }
+int RawSlabsPlugin::voxelType() { return m_voxelType; }
+int RawSlabsPlugin::voxelUnit() { return m_voxelUnit; }
+int RawSlabsPlugin::headerBytes() { return m_headerBytes; }
+
+void
+RawSlabsPlugin::setMinMax(float rmin, float rmax)
 {
   m_rawMin = rmin;
   m_rawMax = rmax;
   
   generateHistogram();
 }
+float RawSlabsPlugin::rawMin() { return m_rawMin; }
+float RawSlabsPlugin::rawMax() { return m_rawMax; }
+QList<uint> RawSlabsPlugin::histogram() { return m_histogram; }
+QList<float> RawSlabsPlugin::rawMap() { return m_rawMap; }
+QList<uchar> RawSlabsPlugin::pvlMap() { return m_pvlMap; }
 
 void
-RemapRawSlabs::setMap(QList<float> rm,
-		       QList<uchar> pm)
+RawSlabsPlugin::setMap(QList<float> rm,
+		  QList<uchar> pm)
 {
   m_rawMap = rm;
   m_pvlMap = pm;
-
-//  QString str;
-//  for(uint i=0; i<m_rawMap.size(); i++)
-//    {
-//      str += QString("%1 -> %2\n").\
-//	arg(m_rawMap[i]).arg(m_pvlMap[i]);
-//    }
-//  
-//  QMessageBox::information(0, "Map", str);
-}
-
-void RemapRawSlabs::setVoxelType(int vt) { m_voxelType = vt; }
-void
-RemapRawSlabs::setSkipHeaderBytes(int b)
-{
-  m_skipBytes = b;
-  m_headerBytes = b;
-}
-
-float RemapRawSlabs::rawMin() { return m_rawMin; }
-float RemapRawSlabs::rawMax() { return m_rawMax; }
-QList<uint> RemapRawSlabs::histogram() { return m_histogram; }
-
-void
-RemapRawSlabs::setGridSize(int d, int w, int h)
-{
-  m_depth = d;
-  m_width = w;
-  m_height = h;
 }
 
 void
-RemapRawSlabs::gridSize(int& d, int& w, int& h)
+RawSlabsPlugin::gridSize(int& d, int& w, int& h)
 {
   d = m_depth;
   w = m_width;
   h = m_height;
 }
 
-bool
-RemapRawSlabs::setFile(QList<QString> fl)
+void
+RawSlabsPlugin::replaceFile(QString flnm)
 {
-  m_fileName = fl;
+  m_fileName.clear();
+  m_fileName << flnm;
+}
+
+bool
+RawSlabsPlugin::setFile(QStringList files)
+{
+  m_fileName = files;
 
   {
     m_slices.clear();
 
-    QFileInfo fi(fl[0]);
+    QFileInfo fi(files[0]);
 
     QString hdrflnm;
     hdrflnm = QFileDialog::getOpenFileName(0,
@@ -250,7 +230,9 @@ RemapRawSlabs::setFile(QList<QString> fl)
 	      }
 	  }	
       }
-    setGridSize(m_slices[m_slices.count()-1], nfY0, nfZ0);
+    m_depth = m_slices[m_slices.count()-1];
+    m_width = nfY0;
+    m_height = nfZ0;
   }
   //------------------------------
   m_bytesPerVoxel = 1;
@@ -297,7 +279,7 @@ RemapRawSlabs::setFile(QList<QString> fl)
 
 
 void
-RemapRawSlabs::findMinMaxandGenerateHistogram()
+RawSlabsPlugin::findMinMaxandGenerateHistogram()
 {
   QProgressDialog progress("Generating Histogram",
 			   "Cancel",
@@ -425,7 +407,7 @@ RemapRawSlabs::findMinMaxandGenerateHistogram()
   }
 
 void
-RemapRawSlabs::findMinMax()
+RawSlabsPlugin::findMinMax()
 {
   QProgressDialog progress("Finding Min and Max",
 			   "Cancel",
@@ -512,7 +494,7 @@ RemapRawSlabs::findMinMax()
   }
 
 void
-RemapRawSlabs::generateHistogram()
+RawSlabsPlugin::generateHistogram()
 {
   QProgressDialog progress("Generating Histogram",
 			   "Cancel",
@@ -611,7 +593,7 @@ RemapRawSlabs::generateHistogram()
 }
 
 void
-RemapRawSlabs::getDepthSlice(int slc,
+RawSlabsPlugin::getDepthSlice(int slc,
 			     uchar *slice)
 {
   int nbytes = m_width*m_height*m_bytesPerVoxel;
@@ -631,7 +613,7 @@ RemapRawSlabs::getDepthSlice(int slc,
 }
 
 QImage
-RemapRawSlabs::getDepthSliceImage(int slc)
+RawSlabsPlugin::getDepthSliceImage(int slc)
 {
   int nX, nY, nZ;
   nX = m_depth;
@@ -691,10 +673,6 @@ RemapRawSlabs::getDepthSliceImage(int slc)
 	  idx = rawSize-1;
 	  frc = 1;
 	}
-      else if (ISNAN(v)) 
-	{
-	  idx = 0;
-	}
       else
 	{
 	  for(uint m=0; m<rawSize; m++)
@@ -720,7 +698,7 @@ RemapRawSlabs::getDepthSliceImage(int slc)
 }
 
 QImage
-RemapRawSlabs::getWidthSliceImage(int slc)
+RawSlabsPlugin::getWidthSliceImage(int slc)
 {
   int nX, nY, nZ;
   nX = m_depth;
@@ -826,7 +804,7 @@ RemapRawSlabs::getWidthSliceImage(int slc)
 }
 
 QImage
-RemapRawSlabs::getHeightSliceImage(int slc)
+RawSlabsPlugin::getHeightSliceImage(int slc)
 {
   int nX, nY, nZ;
   nX = m_depth;
@@ -946,7 +924,7 @@ RemapRawSlabs::getHeightSliceImage(int slc)
 }
 
 QPair<QVariant, QVariant>
-RemapRawSlabs::rawValue(int d, int w, int h)
+RawSlabsPlugin::rawValue(int d, int w, int h)
 {
   QPair<QVariant, QVariant> pair;
 
@@ -1069,14 +1047,16 @@ RemapRawSlabs::rawValue(int d, int w, int h)
 }
 
 void
-RemapRawSlabs::saveTrimmed(QString trimFile,
+RawSlabsPlugin::saveTrimmed(QString trimFile,
 			   int dmin, int dmax,
 			   int wmin, int wmax,
 			   int hmin, int hmax)
 {
-  QMessageBox::information(0, "", "depricated");
+  QMessageBox::information(0, "", "deprecated");
   return;
 }
 
+
 //-------------------------------
 //-------------------------------
+Q_EXPORT_PLUGIN2(rawslabsplugin, RawSlabsPlugin);

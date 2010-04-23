@@ -1,25 +1,22 @@
-#include "remapanalyze.h"
-#include "loadrawdialog.h"
-#include "staticfunctions.h"
+#include <QtGui>
+#include <netcdfcpp.h>
+#include <mfhdf.h>
+#include "common.h"
+#include "hdf4plugin.h"
 
-QString RemapAnalyze::imgFile() { return m_imgFile; }
-
-void RemapAnalyze::voxelSize(float& vx, float& vy, float& vz)
-{
-  vx = m_voxelSizeX;
-  vy = m_voxelSizeY;
-  vz = m_voxelSizeZ;
-}
-
-RemapAnalyze::RemapAnalyze()
+void
+HDF4Plugin::init()
 {
   m_fileName.clear();
-  m_depth = m_width = m_height = 0;
-  m_skipBytes = 0;
-  m_headerBytes = 0;
-  m_voxelType = _UChar;
-  m_bytesPerVoxel = 1;
+  m_imageList.clear();
 
+  m_description.clear();
+  m_depth = m_width = m_height = 0;
+  m_voxelType = _UChar;
+  m_voxelUnit = _Micron;
+  m_voxelSizeX = m_voxelSizeY = m_voxelSizeZ = 1;
+  m_skipBytes = 0;
+  m_bytesPerVoxel = 1;
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
 
@@ -29,15 +26,19 @@ RemapAnalyze::RemapAnalyze()
   m_image = 0;
 }
 
-RemapAnalyze::~RemapAnalyze()
+void
+HDF4Plugin::clear()
 {
   m_fileName.clear();
-  m_depth = m_width = m_height = 0;
-  m_skipBytes = 0;
-  m_headerBytes = 0;
-  m_voxelType = _UChar;
-  m_bytesPerVoxel = 1;
+  m_imageList.clear();
 
+  m_description.clear();
+  m_depth = m_width = m_height = 0;
+  m_voxelType = _UChar;
+  m_voxelUnit = _Micron;
+  m_voxelSizeX = m_voxelSizeY = m_voxelSizeZ = 1;
+  m_skipBytes = 0;
+  m_bytesPerVoxel = 1;
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
 
@@ -50,172 +51,227 @@ RemapAnalyze::~RemapAnalyze()
 }
 
 void
-RemapAnalyze::setMinMax(float rmin, float rmax)
+HDF4Plugin::voxelSize(float& vx, float& vy, float& vz)
+  {
+    vx = m_voxelSizeX;
+    vy = m_voxelSizeY;
+    vz = m_voxelSizeZ;
+  }
+QString HDF4Plugin::description() { return m_description; }
+int HDF4Plugin::voxelType() { return m_voxelType; }
+int HDF4Plugin::voxelUnit() { return m_voxelUnit; }
+int HDF4Plugin::headerBytes() { return m_headerBytes; }
+
+void
+HDF4Plugin::setMinMax(float rmin, float rmax)
 {
   m_rawMin = rmin;
   m_rawMax = rmax;
   
   generateHistogram();
 }
+float HDF4Plugin::rawMin() { return m_rawMin; }
+float HDF4Plugin::rawMax() { return m_rawMax; }
+QList<uint> HDF4Plugin::histogram() { return m_histogram; }
+QList<float> HDF4Plugin::rawMap() { return m_rawMap; }
+QList<uchar> HDF4Plugin::pvlMap() { return m_pvlMap; }
 
 void
-RemapAnalyze::setMap(QList<float> rm,
-		       QList<uchar> pm)
+HDF4Plugin::setMap(QList<float> rm,
+		  QList<uchar> pm)
 {
   m_rawMap = rm;
   m_pvlMap = pm;
 }
 
-void RemapAnalyze::setVoxelType(int vt) { m_voxelType = vt; }
 void
-RemapAnalyze::setSkipHeaderBytes(int b)
-{
-  m_skipBytes = b;
-  m_headerBytes = b;
-}
-
-float RemapAnalyze::rawMin() { return m_rawMin; }
-float RemapAnalyze::rawMax() { return m_rawMax; }
-QList<uint> RemapAnalyze::histogram() { return m_histogram; }
-
-void
-RemapAnalyze::setGridSize(int d, int w, int h)
-{
-  m_depth = d;
-  m_width = w;
-  m_height = h;
-}
-
-void
-RemapAnalyze::gridSize(int& d, int& w, int& h)
+HDF4Plugin::gridSize(int& d, int& w, int& h)
 {
   d = m_depth;
   w = m_width;
   h = m_height;
 }
 
-bool
-RemapAnalyze::setFile(QList<QString> fl)
+QList<QString>
+HDF4Plugin::listAllVariables()
 {
-  m_fileName = fl;
+  QList<QString> varNames;
 
-  if (StaticFunctions::checkExtension(fl[0], "hdr"))
+  NcError err(NcError::verbose_nonfatal);
+
+  NcFile dataFile((char*)m_fileName[0].toAscii().data(),
+		  NcFile::ReadOnly);
+
+  if (!dataFile.is_valid())
     {
-      m_hdrFile = fl[0];
-      m_imgFile = m_hdrFile;
-      m_imgFile.chop(3);
-      m_imgFile += "img";
-    }
-  else if (StaticFunctions::checkExtension(fl[0], "img"))
-    {
-      m_imgFile = fl[0];
-      m_hdrFile = m_imgFile;
-      m_hdrFile.chop(3);
-      m_hdrFile += "hdr";
+      QMessageBox::information(0, "Error",
+			       QString("%1 is not a valid NetCDF file").arg(m_fileName[0]));
+      return varNames; // empty
     }
 
-  QFile fin(m_hdrFile);
-  fin.open(QFile::ReadOnly);
-  fin.read((char*)&(m_analyzeHeader.hk), 40);
-  fin.read((char*)&(m_analyzeHeader.dime), 108);
-  fin.read((char*)&(m_analyzeHeader.hist), 200);
-  fin.close();
-
-  m_byteSwap = false;
-  if (m_analyzeHeader.hk.sizeof_hdr != 348)
+  int nvars = dataFile.num_vars();
+  
+  int i;
+  for (i=0; i < nvars; i++)
     {
-      uchar *sptr = (uchar*)(& m_analyzeHeader.hk.sizeof_hdr);
-      StaticFunctions::swapbytes(sptr, 4);
-      if (m_analyzeHeader.hk.sizeof_hdr != 348)
-	{
-	  QMessageBox::information(0, "Error",
-	       QString("Header Size is not 348 : %1").arg(m_analyzeHeader.hk.sizeof_hdr));
-	  return false;
-	}
-      else
-	{
-	  uchar *sptr;
-	  
-	  for(uint i=0; i<8; i++)
-	    {
-	      sptr = (uchar*) &(m_analyzeHeader.dime.dim[i]);
-	      StaticFunctions::swapbytes(sptr, 2);
-	    }
-	  
-	  for(uint i=0; i<8; i++)
-	    {
-	      sptr = (uchar*) &(m_analyzeHeader.dime.pixdim[i]);
-	      StaticFunctions::swapbytes(sptr, 4);
-	    }
-	  
-	  sptr = (uchar*) &(m_analyzeHeader.dime.datatype);
-	  StaticFunctions::swapbytes(sptr, 2);
+      NcVar *var;
+      var = dataFile.get_var(i);
 
-	  sptr = (uchar*) &(m_analyzeHeader.dime.bitpix);
-	  StaticFunctions::swapbytes(sptr, 2);
+      varNames.append(var->name());
+    }
 
-	  m_byteSwap = true;
-	}
-      }
-  if (m_analyzeHeader.dime.datatype == 0)
+  dataFile.close();
+
+  if (varNames.size() == 0)
+    QMessageBox::information(0, "Error", "No variables found in the file");
+
+  return varNames;
+}
+
+void
+HDF4Plugin::replaceFile(QString flnm)
+{
+  m_fileName.clear();
+  m_fileName << flnm;
+}
+
+bool
+HDF4Plugin::setFile(QStringList files)
+{
+  m_fileName = files;
+
+  // list all hdf4 image files in the directory
+  QStringList imageNameFilter;
+  imageNameFilter << "*.hdf";
+  QStringList hdffiles= QDir(m_fileName[0]).entryList(imageNameFilter,
+						      QDir::NoSymLinks|
+						      QDir::NoDotAndDotDot|
+						      QDir::Readable|
+						      QDir::Files);
+  m_imageList.clear();
+  for(uint i=0; i<hdffiles.size(); i++)
     {
-      if (m_analyzeHeader.dime.bitpix == 8)
-	m_voxelType = _UChar;
-      else if (m_analyzeHeader.dime.bitpix == 16)
-	m_voxelType = _Short;
-      else
-	{
-	  QStringList dtypes;
-	  dtypes << "Int"
-		 << "Float";
+      QFileInfo fileInfo(m_fileName[0], hdffiles[i]);
+      QString imgfl = fileInfo.absoluteFilePath();
+      m_imageList.append(imgfl);
+    }
+
+  m_depth = m_imageList.size();
+
+
+  /* Open the file and initiate the SD interface. */
+  int32 sd_id = SDstart(strdup(m_imageList[0].toAscii().data()),
+			DFACC_READ);
+  if (sd_id < 0) {
+    QMessageBox::information(0, 
+			     "Error",
+			     QString("Failed to open %1").arg(m_imageList[0]));
+    return false;
+  }
+    
+  /* Determine the contents of the file. */
+  int32 dim_sizes[MAX_VAR_DIMS];
+  int32 rank, num_type, attributes, istat;
+  char name[64];
+  int32 n_datasets, n_file_attrs;
+
+  istat = SDfileinfo(sd_id, &n_datasets, &n_file_attrs);
+
+  /* Access the name of every data set in the file. */
+  QStringList varNames;
+  for (int32 index = 0; index < n_datasets; index++)
+    {
+      int32 sds_id = SDselect(sd_id, index);
       
-	  QString option = QInputDialog::getItem(0,
-						 "Data Type",
-						 "Img file does not specify data type. Please choose one. ",
-						 dtypes,
-						 0,
-						 false);
-	  
-	  if (option == "Int")
-	    m_voxelType = _Int;
-	  else if (option == "Float")
-	    m_voxelType = _Float;
-	}
+      istat = SDgetinfo(sds_id, name, &rank, dim_sizes,	\
+			&num_type, &attributes);
+            
+      istat = SDendaccess(sds_id);
+
+      if (rank == 2)
+	varNames.append(name);
+    }
+  
+  QString var;
+  if (varNames.size() == 0) {
+    QMessageBox::information(0, 
+			     "Error",
+			     QString("No variables in file with rank of 2"));
+    return false;
+  } else if (varNames.size() == 1)
+    {
+      var = varNames[0];
     }
   else
     {
-      if (m_analyzeHeader.dime.datatype == 2)
-	m_voxelType = _UChar;
-      else if (m_analyzeHeader.dime.datatype == 4)
-	m_voxelType = _Short;
-      else if (m_analyzeHeader.dime.datatype == 8)
-	m_voxelType = _Int;
-      else if (m_analyzeHeader.dime.datatype == 16)
-	m_voxelType = _Float;
+      var = QInputDialog::getItem(0,
+				  "Select Variable to Extract",
+				  "Variable Names",
+				  varNames,
+				  0,
+				  false);
+    }
+  
+  m_Index = 0;
+  for (int32 index = 0; index < n_datasets; index++)
+    {
+      int32 sds_id = SDselect(sd_id, index);
+      
+      istat = SDgetinfo(sds_id, name, &rank, dim_sizes,	\
+			&num_type, &attributes);
+      
+      istat = SDendaccess(sds_id);
+      
+      if (var == QString(name))
+	{
+	  m_Index = index;
+	  break;
+	}
     }
 
-  if (m_voxelType == _UChar)
-    m_byteSwap = false;
-  
-  m_skipBytes = 0;
-  
-  m_depth = m_analyzeHeader.dime.dim[3];
-  m_width = m_analyzeHeader.dime.dim[2];
-  m_height = m_analyzeHeader.dime.dim[1];  
+  {    
+    int32 sds_id = SDselect(sd_id, m_Index);
+    
+    istat = SDgetinfo(sds_id,
+		      name,
+		      &rank,
+		      dim_sizes,
+		      &num_type,
+		      &attributes);
+    
+    istat = SDendaccess(sds_id);
+  }
 
-  m_voxelSizeX = m_analyzeHeader.dime.pixdim[1];
-  m_voxelSizeY = m_analyzeHeader.dime.pixdim[2];
-  m_voxelSizeZ = m_analyzeHeader.dime.pixdim[3];
+  /* Terminate access to the SD interface and close the file. */
+  istat = SDend(sd_id);
 
-  m_headerBytes = m_skipBytes;
-  //------------------------------
 
-//  QMessageBox::information(0, "",
-//			   QString("%1 %2 %3\n%4\n%5").			\
-//			   arg(m_depth).arg(m_width).arg(m_height).	\
-//			   arg(m_analyzeHeader.dime.datatype).		\
-//			   arg(m_imgFile));  
-  
+  if (num_type == DFNT_CHAR8)
+    m_voxelType = _Char;
+  else if (num_type == DFNT_UCHAR8)
+    m_voxelType = _UChar;
+  else if (num_type == DFNT_INT8)
+    m_voxelType = _Char;
+  else if (num_type == DFNT_UINT8)
+    m_voxelType = _UChar;
+  else if (num_type == DFNT_INT16)
+    m_voxelType = _Short;
+  else if (num_type == DFNT_UINT16)
+    m_voxelType = _UShort;
+  else if (num_type == DFNT_INT32)
+    m_voxelType = _Int;
+  else if (num_type == DFNT_FLOAT32)
+    m_voxelType = _Float;
+  else
+    {
+      QMessageBox::information(0, "Error",
+			       QString("Cannot handle datatype %1").arg(num_type));
+      return false;
+    }
+
+  m_width = dim_sizes[0];
+  m_height = dim_sizes[1];
+
   m_bytesPerVoxel = 1;
   if (m_voxelType == _UChar) m_bytesPerVoxel = 1;
   else if (m_voxelType == _Char) m_bytesPerVoxel = 1;
@@ -223,6 +279,8 @@ RemapAnalyze::setFile(QList<QString> fl)
   else if (m_voxelType == _Short) m_bytesPerVoxel = 2;
   else if (m_voxelType == _Int) m_bytesPerVoxel = 4;
   else if (m_voxelType == _Float) m_bytesPerVoxel = 4;
+
+  m_headerBytes = 0;
 
   if (m_voxelType == _UChar ||
       m_voxelType == _Char ||
@@ -245,9 +303,10 @@ RemapAnalyze::setFile(QList<QString> fl)
   return true;
 }
 
+
 #define MINMAXANDHISTOGRAM()				\
   {							\
-    for(uint j=0; j<nY*nZ; j++)				\
+    for(int j=0; j<nY*nZ; j++)				\
       {							\
 	int val = ptr[j];				\
 	m_rawMin = qMin(m_rawMin, (float)val);		\
@@ -258,9 +317,8 @@ RemapAnalyze::setFile(QList<QString> fl)
       }							\
   }
 
-
 void
-RemapAnalyze::findMinMaxandGenerateHistogram()
+HDF4Plugin::findMinMaxandGenerateHistogram()
 {
   QProgressDialog progress("Generating Histogram",
 			   "Cancel",
@@ -303,21 +361,24 @@ RemapAnalyze::findMinMaxandGenerateHistogram()
   int nbytes = nY*nZ*m_bytesPerVoxel;
   uchar *tmp = new uchar[nbytes];
 
-  QFile fin(m_imgFile);
-  fin.open(QFile::ReadOnly);
-  fin.seek(m_skipBytes);
+  int32 start[2], edges[2];
+  start[0] = start[1] = 0;
+  edges[0] = m_width;
+  edges[1] = m_height;
 
-  m_rawMin = 10000000;
-  m_rawMax = -10000000;
-  for(uint i=0; i<nX; i++)
+  for(uint i=0; i<m_depth; i++)
     {
-      progress.setValue((int)(100.0*(float)i/(float)nX));
+      progress.setValue((int)(100.0*(float)i/(float)m_depth));
       qApp->processEvents();
 
-      fin.read((char*)tmp, nbytes);
-
-      if (m_byteSwap && m_bytesPerVoxel > 1)
-	StaticFunctions::swapbytes(tmp, m_bytesPerVoxel, nbytes);      
+      int32 sd_id = SDstart(m_imageList[i].toAscii().data(),
+			    DFACC_READ);
+      int32 sds_id = SDselect(sd_id, m_Index);
+      int status = SDreaddata(sds_id,
+			      start, NULL, edges,
+			      (VOIDP)tmp);
+      status = SDendaccess(sds_id);
+      status = SDend(sd_id);
 
       if (m_voxelType == _UChar)
 	{
@@ -350,7 +411,6 @@ RemapAnalyze::findMinMaxandGenerateHistogram()
 	  MINMAXANDHISTOGRAM();
 	}
     }
-  fin.close();
 
   delete [] tmp;
 
@@ -363,7 +423,6 @@ RemapAnalyze::findMinMaxandGenerateHistogram()
   qApp->processEvents();
 }
 
-
 #define FINDMINMAX()					\
   {							\
     for(uint j=0; j<nY*nZ; j++)				\
@@ -374,8 +433,9 @@ RemapAnalyze::findMinMaxandGenerateHistogram()
       }							\
   }
 
+
 void
-RemapAnalyze::findMinMax()
+HDF4Plugin::findMinMax()
 {
   QProgressDialog progress("Finding Min and Max",
 			   "Cancel",
@@ -392,21 +452,27 @@ RemapAnalyze::findMinMax()
   int nbytes = nY*nZ*m_bytesPerVoxel;
   uchar *tmp = new uchar[nbytes];
 
-  QFile fin(m_imgFile);
-  fin.open(QFile::ReadOnly);
-  fin.seek(m_skipBytes);
-
   m_rawMin = 10000000;
   m_rawMax = -10000000;
-  for(uint i=0; i<nX; i++)
+
+  int32 start[2], edges[2];
+  start[0] = start[1] = 0;
+  edges[0] = m_width;
+  edges[1] = m_height;
+
+  for(uint i=0; i<m_depth; i++)
     {
       progress.setValue((int)(100.0*(float)i/(float)nX));
       qApp->processEvents();
 
-      fin.read((char*)tmp, nbytes);
-
-      if (m_byteSwap && m_bytesPerVoxel > 1)
-	StaticFunctions::swapbytes(tmp, m_bytesPerVoxel, nbytes);      
+      int32 sd_id = SDstart(m_imageList[i].toAscii().data(),
+			    DFACC_READ);
+      int32 sds_id = SDselect(sd_id, m_Index);
+      int status = SDreaddata(sds_id,
+			      start, NULL, edges,
+			      (void*)tmp);
+      status = SDendaccess(sds_id);
+      status = SDend(sd_id);
 
       if (m_voxelType == _UChar)
 	{
@@ -439,7 +505,6 @@ RemapAnalyze::findMinMax()
 	  FINDMINMAX();
 	}
     }
-  fin.close();
 
   delete [] tmp;
 
@@ -453,22 +518,22 @@ RemapAnalyze::findMinMax()
       {							\
 	float fidx = (ptr[j]-m_rawMin)/rSize;		\
 	fidx = qBound(0.0f, fidx, 1.0f);		\
-	int idx = fidx*histogramSize;			\
+	int idx = fidx*(histogramSize - 1);		\
 	m_histogram[idx]+=1;				\
       }							\
   }
 
 void
-RemapAnalyze::generateHistogram()
+HDF4Plugin::generateHistogram()
 {
+  float rSize = m_rawMax-m_rawMin;
+
   QProgressDialog progress("Generating Histogram",
 			   "Cancel",
 			   0, 100,
 			   0);
   progress.setMinimumDuration(0);
 
-
-  float rSize = m_rawMax-m_rawMin;
 
   int nX, nY, nZ;
   nX = m_depth;
@@ -477,10 +542,6 @@ RemapAnalyze::generateHistogram()
 
   int nbytes = nY*nZ*m_bytesPerVoxel;
   uchar *tmp = new uchar[nbytes];
-
-  QFile fin(m_imgFile);
-  fin.open(QFile::ReadOnly);
-  fin.seek(m_skipBytes);
 
   m_histogram.clear();
   if (m_voxelType == _UChar ||
@@ -498,15 +559,26 @@ RemapAnalyze::generateHistogram()
     }
 
   int histogramSize = m_histogram.size()-1;
+
+  int32 start[2], edges[2];
+  start[0] = start[1] = 0;
+  edges[0] = m_width;
+  edges[1] = m_height;
+
   for(uint i=0; i<nX; i++)
     {
       progress.setValue((int)(100.0*(float)i/(float)nX));
       qApp->processEvents();
 
-      fin.read((char*)tmp, nbytes);
+      int32 sd_id = SDstart(m_imageList[i].toAscii().data(),
+			    DFACC_READ);
+      int32 sds_id = SDselect(sd_id, m_Index);
+      int status = SDreaddata(sds_id,
+			      start, NULL, edges,
+			      (VOIDP)tmp);
+      status = SDendaccess(sds_id);
+      status = SDend(sd_id);
 
-      if (m_byteSwap && m_bytesPerVoxel > 1)
-	StaticFunctions::swapbytes(tmp, m_bytesPerVoxel, nbytes);      
 
       if (m_voxelType == _UChar)
 	{
@@ -539,7 +611,6 @@ RemapAnalyze::generateHistogram()
 	  GENHISTOGRAM();
 	}
     }
-  fin.close();
 
   delete [] tmp;
 
@@ -548,57 +619,58 @@ RemapAnalyze::generateHistogram()
   while(m_histogram.first() == 0)
     m_histogram.removeFirst();
 
-//  QMessageBox::information(0, "",  QString("%1 %2 : %3").\
-//			   arg(m_rawMin).arg(m_rawMax).arg(rSize));
-
   progress.setValue(100);
   qApp->processEvents();
 }
 
 
 void
-RemapAnalyze::getDepthSlice(int slc,
-			    uchar *slice)
+HDF4Plugin::getDepthSlice(int slc,
+			 uchar *slice)
 {
   int nbytes = m_width*m_height*m_bytesPerVoxel;
 
-  QFile fin(m_imgFile);
-  fin.open(QFile::ReadOnly);
-  fin.seek(m_skipBytes + nbytes*slc);
-  fin.read((char*)slice, nbytes);
-  fin.close();
+  int32 start[2], edges[2];
+  start[0] = start[1] = 0;
+  edges[0] = m_width;
+  edges[1] = m_height;
 
-  if (m_byteSwap && m_bytesPerVoxel > 1)
-    StaticFunctions::swapbytes(slice, m_bytesPerVoxel, nbytes);      
+  int32 sd_id = SDstart(m_imageList[slc].toAscii().data(),
+			DFACC_READ);
+  int32 sds_id = SDselect(sd_id, m_Index);
+  int status = SDreaddata(sds_id,
+			  start, NULL, edges,
+			  (VOIDP)slice);
+  status = SDendaccess(sds_id);
+  status = SDend(sd_id);
 }
 
 QImage
-RemapAnalyze::getDepthSliceImage(int slc)
+HDF4Plugin::getDepthSliceImage(int slc)
 {
-  int nX, nY, nZ;
-  nX = m_depth;
-  nY = m_width;
-  nZ = m_height;
-
-  int nbytes = nY*nZ*m_bytesPerVoxel;
-  uchar *tmp = new uchar[nbytes];
-
   if (m_image)
     delete [] m_image;
-  m_image = new uchar[nY*nZ];
+  m_image = new uchar[m_width*m_height];
 
+  int nbytes = m_width*m_height*m_bytesPerVoxel;
+  uchar *tmp = new uchar[nbytes];
 
-  QFile fin(m_imgFile);
-  fin.open(QFile::ReadOnly);
-  fin.seek(m_skipBytes + nbytes*slc);
-  fin.read((char*)tmp, nbytes);
-  fin.close();
+  int32 start[2], edges[2];
+  start[0] = start[1] = 0;
+  edges[0] = m_width;
+  edges[1] = m_height;
 
-  if (m_byteSwap && m_bytesPerVoxel > 1)
-    StaticFunctions::swapbytes(tmp, m_bytesPerVoxel, nbytes);      
+  int32 sd_id = SDstart(m_imageList[slc].toAscii().data(),
+			DFACC_READ);
+  int32 sds_id = SDselect(sd_id, m_Index);
+  int status = SDreaddata(sds_id,
+			  start, NULL, edges,
+			  (VOIDP)tmp);
+  status = SDendaccess(sds_id);
+  status = SDend(sd_id);
 
   int rawSize = m_rawMap.size()-1;
-  for(uint i=0; i<nY*nZ; i++)
+  for(uint i=0; i<m_width*m_height; i++)
     {
       int idx = m_rawMap.size()-1;
       float frc = 0;
@@ -644,7 +716,11 @@ RemapAnalyze::getDepthSliceImage(int slc)
       uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
       m_image[i] = pv;
     }
-  QImage img = QImage(m_image, nZ, nY, nZ, QImage::Format_Indexed8);
+  QImage img = QImage(m_image,
+		      m_height,
+		      m_width,
+		      m_height,
+		      QImage::Format_Indexed8);
 
   delete [] tmp;
 
@@ -652,45 +728,41 @@ RemapAnalyze::getDepthSliceImage(int slc)
 }
 
 QImage
-RemapAnalyze::getWidthSliceImage(int slc)
+HDF4Plugin::getWidthSliceImage(int slc)
 {
-  int nX, nY, nZ;
-  nX = m_depth;
-  nY = m_width;
-  nZ = m_height;
-
-  if (slc < 0 || slc >= nY)
-    {
-      QImage img = QImage(100, 100, QImage::Format_Indexed8);
-      return img;
-    }
-
   if (m_image)
     delete [] m_image;
-  m_image = new uchar[nX*nZ];
 
-  int nbytes = nX*nZ*m_bytesPerVoxel;
+  m_image = new uchar[m_depth*m_height];
+
+  int nbytes = m_depth*m_height*m_bytesPerVoxel;
+
   uchar *tmp = new uchar[nbytes];
+  uchar *hdftmp = new uchar[m_height*m_bytesPerVoxel];
 
-  QFile fin(m_imgFile);
-  fin.open(QFile::ReadOnly);
+  int32 start[2], edges[2];
+  start[0] = 0;
+  start[1] = slc;
+  edges[0] = 1;
+  edges[1] = m_height;
 
-  for(uint k=0; k<nX; k++)
+  for(uint i=0; i<m_depth; i++)
     {
-      fin.seek(m_skipBytes +
-	       (slc*nZ + k*nY*nZ)*m_bytesPerVoxel);
+      int32 sd_id = SDstart(m_imageList[i].toAscii().data(),
+			    DFACC_READ);
+      int32 sds_id = SDselect(sd_id, m_Index);
+      int status = SDreaddata(sds_id,
+			      start, NULL, edges,
+			      (VOIDP)hdftmp);
+      status = SDendaccess(sds_id);
+      status = SDend(sd_id);
 
-      fin.read((char*)(tmp+k*nZ*m_bytesPerVoxel),
-	       nZ*m_bytesPerVoxel);
-
+      for(uint j=0; j<m_height; j++)
+	tmp[i*m_height+j] = hdftmp[j];
     }
-  fin.close();
-
-  if (m_byteSwap && m_bytesPerVoxel > 1)
-    StaticFunctions::swapbytes(tmp, m_bytesPerVoxel, nbytes);      
 
   int rawSize = m_rawMap.size()-1;
-  for(uint i=0; i<nX*nZ; i++)
+  for(uint i=0; i<m_depth*m_height; i++)
     {
       int idx = m_rawMap.size()-1;
       float frc = 0;
@@ -733,10 +805,10 @@ RemapAnalyze::getWidthSliceImage(int slc)
 	    }
 	}
 
-      uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
+      uchar pv = ((idx+1) < m_pvlMap.size()) ? m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]) : m_pvlMap[idx];
       m_image[i] = pv;
     }
-  QImage img = QImage(m_image, nZ, nX, nZ, QImage::Format_Indexed8);
+  QImage img = QImage(m_image, m_height, m_depth, m_height, QImage::Format_Indexed8);
 
   delete [] tmp;
 
@@ -744,52 +816,42 @@ RemapAnalyze::getWidthSliceImage(int slc)
 }
 
 QImage
-RemapAnalyze::getHeightSliceImage(int slc)
+HDF4Plugin::getHeightSliceImage(int slc)
 {
-  int nX, nY, nZ;
-  nX = m_depth;
-  nY = m_width;
-  nZ = m_height;
-
-  if (slc < 0 || slc >= nZ)
-    {
-      QImage img = QImage(100, 100, QImage::Format_Indexed8);
-      return img;
-    }
-
   if (m_image)
     delete [] m_image;
-  m_image = new uchar[nX*nY];
 
-  int nbytes = nX*nY*m_bytesPerVoxel;
+  m_image = new uchar[m_depth*m_width];
+
+  int nbytes = m_depth*m_width*m_bytesPerVoxel;
+
   uchar *tmp = new uchar[nbytes];
+  uchar *hdftmp = new uchar[m_width*m_bytesPerVoxel];
 
-  QFile fin(m_imgFile);
-  fin.open(QFile::ReadOnly);
+  int32 start[2], edges[2];
+  start[0] = slc;
+  start[1] = 0;
+  edges[0] = m_width;
+  edges[1] = 1;
 
-  int ndum = nY*nZ*m_bytesPerVoxel;
-  uchar *dum = new uchar[ndum];
-  
-  uint it=0;
-  for(uint k=0; k<nX; k++)
+  for(uint i=0; i<m_depth; i++)
     {
-      fin.read((char*)dum, ndum);
-      for(uint j=0; j<nY; j++)
-	{
-	  memcpy(tmp+it*m_bytesPerVoxel,
-		 dum+(j*nZ+slc)*m_bytesPerVoxel,
-		 m_bytesPerVoxel);
-	  it++;
-	}
-    }
-  delete [] dum;
-  fin.close();
+      int32 sd_id = SDstart(m_imageList[i].toAscii().data(),
+			    DFACC_READ);
+      int32 sds_id = SDselect(sd_id, m_Index);
+      int status = SDreaddata(sds_id,
+			      start, NULL, edges,
+			      (VOIDP)hdftmp);
+      status = SDendaccess(sds_id);
+      status = SDend(sd_id);
 
-  if (m_byteSwap && m_bytesPerVoxel > 1)
-    StaticFunctions::swapbytes(tmp, m_bytesPerVoxel, nbytes);      
+
+      for(uint j=0; j<m_width; j++)
+	tmp[i*m_width+j] = hdftmp[j];
+    }
 
   int rawSize = m_rawMap.size()-1;
-  for(uint i=0; i<nX*nY; i++)
+  for(uint i=0; i<m_depth*m_width; i++)
     {
       int idx = m_rawMap.size()-1;
       float frc = 0;
@@ -835,7 +897,7 @@ RemapAnalyze::getHeightSliceImage(int slc)
       uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
       m_image[i] = pv;
     }
-  QImage img = QImage(m_image, nY, nX, nY, QImage::Format_Indexed8);
+  QImage img = QImage(m_image, m_width, m_depth, m_width, QImage::Format_Indexed8);
 
   delete [] tmp;
 
@@ -843,7 +905,7 @@ RemapAnalyze::getHeightSliceImage(int slc)
 }
 
 QPair<QVariant, QVariant>
-RemapAnalyze::rawValue(int d, int w, int h)
+HDF4Plugin::rawValue(int d, int w, int h)
 {
   QPair<QVariant, QVariant> pair;
 
@@ -856,73 +918,64 @@ RemapAnalyze::rawValue(int d, int w, int h)
       return pair;
     }
 
-  QFile fin(m_imgFile);
-  fin.open(QFile::ReadOnly);
-  fin.seek(m_skipBytes +
-	   m_bytesPerVoxel*(d*m_width*m_height +
-			    w*m_height +
-			    h));
+  uchar *hdftmp = new uchar[m_bytesPerVoxel];
+  int32 start[2], edges[2];
+  start[0] = w;
+  start[1] = h;
+  edges[0] = 1;
+  edges[1] = 1;
+
+  int32 sd_id = SDstart(m_imageList[d].toAscii().data(),
+			DFACC_READ);
+  int32 sds_id = SDselect(sd_id, m_Index);
+  int status = SDreaddata(sds_id,
+			  start, NULL, edges,
+			  (VOIDP)hdftmp);
+  if (status == -1)
+    QMessageBox::information(0, "error", "Cannot read");
+
+  status = SDendaccess(sds_id);
+  status = SDend(sd_id);
+
 
   QVariant v;
 
   if (m_voxelType == _UChar)
     {
-      unsigned char a;
-      fin.read((char*)&a, m_bytesPerVoxel);
+      uchar *aptr = (uchar*) hdftmp;
+      uchar a = *aptr;
       v = QVariant((uint)a);
     }
   else if (m_voxelType == _Char)
     {
-      char a;
-      fin.read((char*)&a, m_bytesPerVoxel);
+      char *aptr = (char*) hdftmp;
+      char a = *aptr;
       v = QVariant((int)a);
     }
   else if (m_voxelType == _UShort)
     {
-      unsigned short a;
-      fin.read((char*)&a, m_bytesPerVoxel);
-      if (m_byteSwap)
-	{
-	  uchar *sptr = (uchar*)(&a);
-	  StaticFunctions::swapbytes(sptr, 2);
-	}
+      ushort *aptr = (ushort*) hdftmp;
+      ushort a = *aptr;
       v = QVariant((uint)a);
     }
   else if (m_voxelType == _Short)
     {
-      short a;
-      fin.read((char*)&a, m_bytesPerVoxel);
-      if (m_byteSwap)
-	{
-	  uchar *sptr = (uchar*)(&a);
-	  StaticFunctions::swapbytes(sptr, 2);
-	}
+      short *aptr = (short*) hdftmp;
+      short a = *aptr;
       v = QVariant((int)a);
     }
   else if (m_voxelType == _Int)
     {
-      int a;
-      fin.read((char*)&a, m_bytesPerVoxel);
-      if (m_byteSwap)
-	{
-	  uchar *sptr = (uchar*)(&a);
-	  StaticFunctions::swapbytes(sptr, 4);
-	}
+      int *aptr = (int*) hdftmp;
+      int a = *aptr;
       v = QVariant((int)a);
     }
   else if (m_voxelType == _Float)
     {
-      float a;
-      fin.read((char*)&a, m_bytesPerVoxel);
-      if (m_byteSwap)
-	{
-	  uchar *sptr = (uchar*)(&a);
-	  StaticFunctions::swapbytes(sptr, 4);
-	}
+      float *aptr = (float*) hdftmp;
+      double a = *aptr;
       v = QVariant((double)a);
     }
-  fin.close();
- 
 
   int rawSize = m_rawMap.size()-1;
   int idx = rawSize;
@@ -935,6 +988,7 @@ RemapAnalyze::rawValue(int d, int w, int h)
     val = v.toInt();
   else if (v.type() == QVariant::Double)
     val = v.toDouble();
+
 
   if (val <= m_rawMap[0])
     {
@@ -968,10 +1022,10 @@ RemapAnalyze::rawValue(int d, int w, int h)
 }
 
 void
-RemapAnalyze::saveTrimmed(QString trimFile,
-			    int dmin, int dmax,
-			    int wmin, int wmax,
-			    int hmin, int hmax)
+HDF4Plugin::saveTrimmed(QString trimFile,
+		       int dmin, int dmax,
+		       int wmin, int wmax,
+		       int hmin, int hmax)
 {
   QProgressDialog progress("Saving trimmed volume",
 			   "Cancel",
@@ -989,7 +1043,7 @@ RemapAnalyze::saveTrimmed(QString trimFile,
   mY = wmax-wmin+1;
   mZ = hmax-hmin+1;
 
-  int nbytes = nY*nZ*m_bytesPerVoxel;
+  int nbytes = m_height*m_width*m_bytesPerVoxel;
   uchar *tmp = new uchar[nbytes];
 
   uchar vt;
@@ -999,7 +1053,7 @@ RemapAnalyze::saveTrimmed(QString trimFile,
   if (m_voxelType == _Short) vt = 3; // signed short
   if (m_voxelType == _Int) vt = 4; // int
   if (m_voxelType == _Float) vt = 8; // float
-  
+
   QFile fout(trimFile);
   fout.open(QFile::WriteOnly);
 
@@ -1008,33 +1062,36 @@ RemapAnalyze::saveTrimmed(QString trimFile,
   fout.write((char*)&mY, 4);
   fout.write((char*)&mZ, 4);
 
-  QFile fin(m_imgFile);
-  fin.open(QFile::ReadOnly);
-  fin.seek(m_skipBytes + nbytes*dmin);
+  int32 start[2], edges[2];
+  start[0] = 0;
+  start[1] = 0;
+  edges[0] = m_width;
+  edges[1] = m_height;
 
   for(uint i=dmin; i<=dmax; i++)
     {
-      fin.read((char*)tmp, nbytes);
-
+      int32 sd_id = SDstart(m_imageList[i].toAscii().data(),
+			    DFACC_READ);
+      int32 sds_id = SDselect(sd_id, m_Index);
+      int status = SDreaddata(sds_id,
+			      start, NULL, edges,
+			      (VOIDP)tmp);
+      status = SDendaccess(sds_id);
+      status = SDend(sd_id);
+      
       for(uint j=wmin; j<=wmax; j++)
 	{
 	  memcpy(tmp+(j-wmin)*mZ*m_bytesPerVoxel,
 		 tmp+(j*nZ + hmin)*m_bytesPerVoxel,
 		 mZ*m_bytesPerVoxel);
 	}
-	  
-      if (m_byteSwap && m_bytesPerVoxel > 1)
-	StaticFunctions::swapbytes(tmp,
-				   m_bytesPerVoxel,
-				   mY*mZ*m_bytesPerVoxel);      
 
       fout.write((char*)tmp, mY*mZ*m_bytesPerVoxel);
-
+      
       progress.setValue((int)(100*(float)(i-dmin)/(float)mX));
       qApp->processEvents();
     }
 
-  fin.close();
   fout.close();
 
   delete [] tmp;
@@ -1044,3 +1101,4 @@ RemapAnalyze::saveTrimmed(QString trimFile,
 
 //-------------------------------
 //-------------------------------
+Q_EXPORT_PLUGIN2(hdf4plugin, HDF4Plugin);

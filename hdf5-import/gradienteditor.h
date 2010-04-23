@@ -25,8 +25,11 @@ class GradientEditor : public QWidget
     void mouseDoubleClickEvent(QMouseEvent*);
     void mouseReleaseEvent(QMouseEvent*);
     void mousePressEvent(QMouseEvent*);
+    void keyPressEvent(QKeyEvent*);
+    void enterEvent(QEvent*);
+    void leaveEvent(QEvent*);
 
-    uint border() const;
+    int border() const;
     void setBorder(const int);
 
     void setGradientStops(QGradientStops);
@@ -53,13 +56,13 @@ class GradientEditor : public QWidget
 
     QPolygonF m_points;
     QVector<QColor> m_colors;
-    QVector<uint> m_locks;
+    QVector<int> m_locks;
     
-    uint m_generalLock;
+    int m_generalLock;
 
     QRectF m_bounds;
 
-    uint m_border;
+    int m_border;
 
     QSizeF m_pointSize;
     int m_currentIndex;
@@ -77,6 +80,11 @@ class GradientEditor : public QWidget
     QPointF convertWidgetToLocal(QPointF);
     QPointF bound_point(QPointF, int);
     void movePoint(int, QPointF);
+    void askGradientChoice();
+    void saveGradientStops();      
+    void copyGradientFile(QString);
+    void flipGradientStops();      
+    void scaleOpacity(float);
 };
 
 #endif

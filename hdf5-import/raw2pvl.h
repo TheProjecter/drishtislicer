@@ -2,40 +2,21 @@
 #define RAW2PVL_H
 
 #include <QtGui>
-#include "remapanalyze.h"
-#include "remapdicomvolume.h"
-#include "remaphdf4.h"
-#include "remapimagevolume.h"
-#include "remapncvolume.h"
-#include "remaprawslices.h"
-#include "remaprawvolume.h"
-#include "remaptomvolume.h"
+
+#include "volinterface.h"
+
+//#include "remapanalyze.h"
+//#include "remapdicomvolume.h"
+//#include "remaphdf4.h"
+//#include "remapimagevolume.h"
+//#include "remapncvolume.h"
+//#include "remaprawslices.h"
+//#include "remaprawvolume.h"
+//#include "remaptomvolume.h"
 
 class Raw2Pvl
 {
  public :
-  enum VoxelType
-  {
-    _UChar = 0,
-    _Char,
-    _UShort,
-    _Short,
-    _Int,
-    _Float
-  };
-  
-  enum VoxelUnit {
-    _Nounit = 0,
-    _Angstrom,
-    _Nanometer,
-    _Micron,
-    _Millimeter,
-    _Centimeter,
-    _Meter,
-    _Kilometer,
-    _Parsec,
-    _Kiloparsec
-  };
 
   enum VolumeFilters {
     _NoFilter = 0,
@@ -65,7 +46,7 @@ class Raw2Pvl
 			      int, int, int,
 			      int, int);
 
-  static void savePvl(AbstractRemapVolume*,
+  static void savePvl(VolInterface*,
 		      int,
 		      int, int,
 		      int, int,

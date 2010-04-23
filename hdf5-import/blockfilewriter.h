@@ -15,16 +15,6 @@ class BlockFileWriter
  public :
   BlockFileWriter();
   ~BlockFileWriter();
-  
-  enum VoxelType
-  {
-    _UChar = 0,
-    _Char,
-    _UShort,
-    _Short,
-    _Int,
-    _Float
-  };
 
   QString fileName();
   QString baseFilename();

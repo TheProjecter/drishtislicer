@@ -1,14 +1,18 @@
-#include "remaptomvolume.h"
+#include <QtGui>
+#include "common.h"
+#include "tomplugin.h"
 
-RemapTomVolume::RemapTomVolume()
+void
+TomPlugin::init()
 {
   m_fileName.clear();
+  m_description.clear();
   m_depth = m_width = m_height = 0;
-  m_skipBytes = 0;
-  m_headerBytes = 0;
   m_voxelType = _UChar;
+  m_voxelUnit = _Micron;
+  m_voxelSizeX = m_voxelSizeY = m_voxelSizeZ = 1;
+  m_skipBytes = 0;
   m_bytesPerVoxel = 1;
-
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
 
@@ -18,15 +22,17 @@ RemapTomVolume::RemapTomVolume()
   m_image = 0;
 }
 
-RemapTomVolume::~RemapTomVolume()
+void
+TomPlugin::clear()
 {
   m_fileName.clear();
+  m_description.clear();
   m_depth = m_width = m_height = 0;
-  m_skipBytes = 0;
-  m_headerBytes = 0;
   m_voxelType = _UChar;
+  m_voxelUnit = _Micron;
+  m_voxelSizeX = m_voxelSizeY = m_voxelSizeZ = 1;
+  m_skipBytes = 0;
   m_bytesPerVoxel = 1;
-
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
 
@@ -39,38 +45,58 @@ RemapTomVolume::~RemapTomVolume()
 }
 
 void
-RemapTomVolume::setMinMax(float rmin, float rmax)
+TomPlugin::voxelSize(float& vx, float& vy, float& vz)
+  {
+    vx = m_voxelSizeX;
+    vy = m_voxelSizeY;
+    vz = m_voxelSizeZ;
+  }
+QString TomPlugin::description() { return m_description; }
+int TomPlugin::voxelType() { return m_voxelType; }
+int TomPlugin::voxelUnit() { return m_voxelUnit; }
+int TomPlugin::headerBytes() { return m_headerBytes; }
+
+void
+TomPlugin::setMinMax(float rmin, float rmax)
 {
   m_rawMin = rmin;
   m_rawMax = rmax;
   
   generateHistogram();
 }
+float TomPlugin::rawMin() { return m_rawMin; }
+float TomPlugin::rawMax() { return m_rawMax; }
+QList<uint> TomPlugin::histogram() { return m_histogram; }
+QList<float> TomPlugin::rawMap() { return m_rawMap; }
+QList<uchar> TomPlugin::pvlMap() { return m_pvlMap; }
 
 void
-RemapTomVolume::setMap(QList<float> rm,
-		       QList<uchar> pm)
+TomPlugin::setMap(QList<float> rm,
+		  QList<uchar> pm)
 {
   m_rawMap = rm;
   m_pvlMap = pm;
 }
 
-float RemapTomVolume::rawMin() { return m_rawMin; }
-float RemapTomVolume::rawMax() { return m_rawMax; }
-QList<uint> RemapTomVolume::histogram() { return m_histogram; }
-
 void
-RemapTomVolume::gridSize(int& d, int& w, int& h)
+TomPlugin::gridSize(int& d, int& w, int& h)
 {
   d = m_depth;
   w = m_width;
   h = m_height;
 }
 
-bool
-RemapTomVolume::setFile(QList<QString> fl)
+void
+TomPlugin::replaceFile(QString flnm)
 {
-  m_fileName = fl;
+  m_fileName.clear();
+  m_fileName << flnm;
+}
+
+bool
+TomPlugin::setFile(QStringList files)
+{
+  m_fileName = files;
 
   QFile fin(m_fileName[0]);
   fin.open(QFile::ReadOnly);
@@ -122,7 +148,7 @@ RemapTomVolume::setFile(QList<QString> fl)
   }
 
 void
-RemapTomVolume::generateHistogram()
+TomPlugin::generateHistogram()
 {
   QProgressDialog progress("Generating Histogram",
 			   "Cancel",
@@ -203,7 +229,7 @@ RemapTomVolume::generateHistogram()
 }
 
 void
-RemapTomVolume::getDepthSlice(int slc,
+TomPlugin::getDepthSlice(int slc,
 			      uchar *slice)
 {
   int nbytes = m_width*m_height*m_bytesPerVoxel;
@@ -215,7 +241,7 @@ RemapTomVolume::getDepthSlice(int slc,
 }
 
 QImage
-RemapTomVolume::getDepthSliceImage(int slc)
+TomPlugin::getDepthSliceImage(int slc)
 {
   int nX, nY, nZ;
   nX = m_depth;
@@ -278,7 +304,7 @@ RemapTomVolume::getDepthSliceImage(int slc)
 }
 
 QImage
-RemapTomVolume::getWidthSliceImage(int slc)
+TomPlugin::getWidthSliceImage(int slc)
 {
   int nX, nY, nZ;
   nX = m_depth;
@@ -355,7 +381,7 @@ RemapTomVolume::getWidthSliceImage(int slc)
 }
 
 QImage
-RemapTomVolume::getHeightSliceImage(int slc)
+TomPlugin::getHeightSliceImage(int slc)
 {
   int nX, nY, nZ;
   nX = m_depth;
@@ -440,7 +466,7 @@ RemapTomVolume::getHeightSliceImage(int slc)
 }
 
 QPair<QVariant, QVariant>
-RemapTomVolume::rawValue(int d, int w, int h)
+TomPlugin::rawValue(int d, int w, int h)
 {
   QPair<QVariant, QVariant> pair;
 
@@ -503,7 +529,7 @@ RemapTomVolume::rawValue(int d, int w, int h)
 }
 
 void
-RemapTomVolume::saveTrimmed(QString trimFile,
+TomPlugin::saveTrimmed(QString trimFile,
 			    int dmin, int dmax,
 			    int wmin, int wmax,
 			    int hmin, int hmax)
@@ -566,44 +592,6 @@ RemapTomVolume::saveTrimmed(QString trimFile,
   m_headerBytes = 13; // to be used for applyMapping function
 }
 
-void
-RemapTomVolume::extractRawVolume(QString trimFile)
-{
-  int nX, nY, nZ;
-  nX = m_depth;
-  nY = m_width;
-  nZ = m_height;
-
-  int nbytes = nY*nZ*m_bytesPerVoxel;
-  uchar *tmp = new uchar[nbytes];
-
-  uchar vt = 0; // unsigned byte
-  
-  QFile fout(trimFile);
-  fout.open(QFile::WriteOnly);
-
-  fout.write((char*)&vt, 1);
-  fout.write((char*)&nX, 4);
-  fout.write((char*)&nY, 4);
-  fout.write((char*)&nZ, 4);
-
-  QFile fin(m_fileName[0]);
-  fin.open(QFile::ReadOnly);
-  fin.seek(m_skipBytes);
-
-  for(uint i=0; i<m_depth; i++)
-    {
-      fin.read((char*)tmp, nbytes);
-
-      fout.write((char*)tmp, nbytes);
-    }
-
-  fin.close();
-  fout.close();
-
-  delete [] tmp;
-  
-  return;
-}
 //-------------------------------
 //-------------------------------
+Q_EXPORT_PLUGIN2(tomplugin, TomPlugin);

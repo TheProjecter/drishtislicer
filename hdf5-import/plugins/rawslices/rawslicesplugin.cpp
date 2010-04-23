@@ -1,40 +1,41 @@
-#include "remaprawslices.h"
+#include <QtGui>
+#include "common.h"
+#include "rawslicesplugin.h"
 #include "loadrawdialog.h"
 
-#include <string>
-using namespace std;
-
-
-RemapRawSlices::RemapRawSlices()
+void
+RawSlicesPlugin::init()
 {
   m_fileName.clear();
   m_imageList.clear();
 
+  m_description.clear();
   m_depth = m_width = m_height = 0;
-  m_headerBytes = 0;
   m_voxelType = _UChar;
+  m_voxelUnit = _Micron;
+  m_voxelSizeX = m_voxelSizeY = m_voxelSizeZ = 1;
   m_bytesPerVoxel = 1;
-
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
 
   m_rawMap.clear();
   m_pvlMap.clear();
 
-
   m_image = 0;
 }
 
-RemapRawSlices::~RemapRawSlices()
+void
+RawSlicesPlugin::clear()
 {
   m_fileName.clear();
   m_imageList.clear();
 
+  m_description.clear();
   m_depth = m_width = m_height = 0;
-  m_headerBytes = 0;
   m_voxelType = _UChar;
+  m_voxelUnit = _Micron;
+  m_voxelSizeX = m_voxelSizeY = m_voxelSizeZ = 1;
   m_bytesPerVoxel = 1;
-
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
 
@@ -47,74 +48,76 @@ RemapRawSlices::~RemapRawSlices()
 }
 
 void
-RemapRawSlices::setMinMax(float rmin, float rmax)
+RawSlicesPlugin::voxelSize(float& vx, float& vy, float& vz)
+  {
+    vx = m_voxelSizeX;
+    vy = m_voxelSizeY;
+    vz = m_voxelSizeZ;
+  }
+QString RawSlicesPlugin::description() { return m_description; }
+int RawSlicesPlugin::voxelType() { return m_voxelType; }
+int RawSlicesPlugin::voxelUnit() { return m_voxelUnit; }
+int RawSlicesPlugin::headerBytes() { return m_headerBytes; }
+
+void
+RawSlicesPlugin::setMinMax(float rmin, float rmax)
 {
   m_rawMin = rmin;
   m_rawMax = rmax;
   
   generateHistogram();
 }
+float RawSlicesPlugin::rawMin() { return m_rawMin; }
+float RawSlicesPlugin::rawMax() { return m_rawMax; }
+QList<uint> RawSlicesPlugin::histogram() { return m_histogram; }
+QList<float> RawSlicesPlugin::rawMap() { return m_rawMap; }
+QList<uchar> RawSlicesPlugin::pvlMap() { return m_pvlMap; }
 
 void
-RemapRawSlices::setMap(QList<float> rm,
-			 QList<uchar> pm)
+RawSlicesPlugin::setMap(QList<float> rm,
+		  QList<uchar> pm)
 {
   m_rawMap = rm;
   m_pvlMap = pm;
 }
 
-float RemapRawSlices::rawMin() { return m_rawMin; }
-float RemapRawSlices::rawMax() { return m_rawMax; }
-QList<uint> RemapRawSlices::histogram() { return m_histogram; }
-
 void
-RemapRawSlices::gridSize(int& d, int& w, int& h)
+RawSlicesPlugin::gridSize(int& d, int& w, int& h)
 {
   d = m_depth;
   w = m_width;
   h = m_height;
 }
 
-// ---- class for sorting DICOM images ----
-class tag
+void
+RawSlicesPlugin::replaceFile(QString flnm)
 {
- public :
-  int id;
-  float loc;
-  bool operator<(const tag& a) const
-  {
-    return (loc < a.loc);
-  };
-  tag& operator=(const tag& a)
-  {
-    id = a.id;
-    loc = a.loc;
-    return *this;
-  };
-};
+  m_fileName.clear();
+  m_fileName << flnm;
+}
 
 bool
-RemapRawSlices::setFile(QList<QString> fl)
+RawSlicesPlugin::setFile(QStringList files)
 {
-  m_imageList.clear();
+  m_fileName = files;
 
-  m_fileName = fl;
+  m_imageList.clear();
 
 
   // list all image files in the directory
   QStringList imageNameFilter;
   imageNameFilter << "*";
-  QStringList files= QDir(m_fileName[0]).entryList(imageNameFilter,
-						   QDir::NoSymLinks|
-						   QDir::NoDotAndDotDot|
-						   QDir::Readable|
-						   QDir::Files);
+  QStringList imgfiles= QDir(m_fileName[0]).entryList(imageNameFilter,
+						      QDir::NoSymLinks|
+						      QDir::NoDotAndDotDot|
+						      QDir::Readable|
+						      QDir::Files);
 
 
   m_imageList.clear();
-  for(uint i=0; i<files.size(); i++)
+  for(uint i=0; i<imgfiles.size(); i++)
     {
-      QFileInfo fileInfo(m_fileName[0], files[i]);
+      QFileInfo fileInfo(m_fileName[0], imgfiles[i]);
       QString imgfl = fileInfo.absoluteFilePath();
       m_imageList.append(imgfl);
     }
@@ -167,6 +170,7 @@ RemapRawSlices::setFile(QList<QString> fl)
   return true;
 }
 
+
 #define MINMAXANDHISTOGRAM()				\
   {							\
     for(uint j=0; j<m_width*m_height; j++)		\
@@ -180,16 +184,9 @@ RemapRawSlices::setFile(QList<QString> fl)
       }							\
   }
 
-
 void
-RemapRawSlices::findMinMaxandGenerateHistogram()
+RawSlicesPlugin::findMinMaxandGenerateHistogram()
 {
-  QProgressDialog progress("Generating Histogram",
-			   0,
-			   0, 100,
-			   0);
-  progress.setMinimumDuration(0);
-
   float rSize;
   float rMin;
   m_histogram.clear();
@@ -232,6 +229,12 @@ RemapRawSlices::findMinMaxandGenerateHistogram()
 
   m_rawMin = 10000000;
   m_rawMax = -10000000;
+
+  QProgressDialog progress("Generating Histogram",
+			   0,
+			   0, 100,
+			   0);
+  progress.setMinimumDuration(0);
 
   for(uint i=0; i<m_depth; i++)
     {
@@ -293,7 +296,7 @@ RemapRawSlices::findMinMaxandGenerateHistogram()
 
 #define FINDMINMAX()					\
   {							\
-    for(uint j=0; j<m_width*m_height; j++)				\
+    for(uint j=0; j<m_width*m_height; j++)		\
       {							\
 	float val = ptr[j];				\
 	m_rawMin = qMin(m_rawMin, val);			\
@@ -302,7 +305,7 @@ RemapRawSlices::findMinMaxandGenerateHistogram()
   }
 
 void
-RemapRawSlices::findMinMax()
+RawSlicesPlugin::findMinMax()
 {
   QProgressDialog progress("Finding Min and Max",
 			   "Cancel",
@@ -374,7 +377,7 @@ RemapRawSlices::findMinMax()
 
 #define GENHISTOGRAM()					\
   {							\
-    for(uint j=0; j<m_width*m_height; j++)				\
+    for(uint j=0; j<m_width*m_height; j++)		\
       {							\
 	float fidx = (ptr[j]-m_rawMin)/rSize;		\
 	fidx = qBound(0.0f, fidx, 1.0f);		\
@@ -384,7 +387,7 @@ RemapRawSlices::findMinMax()
   }
 
 void
-RemapRawSlices::generateHistogram()
+RawSlicesPlugin::generateHistogram()
 {
   QProgressDialog progress("Generating Histogram",
 			   "Cancel",
@@ -478,7 +481,7 @@ RemapRawSlices::generateHistogram()
 }
 
 void
-RemapRawSlices::getDepthSlice(int slc,
+RawSlicesPlugin::getDepthSlice(int slc,
 			      uchar *slice)
 {
   int nbytes = m_width*m_height*m_bytesPerVoxel;
@@ -490,7 +493,7 @@ RemapRawSlices::getDepthSlice(int slc,
 }
 
 QImage
-RemapRawSlices::getDepthSliceImage(int slc)
+RawSlicesPlugin::getDepthSliceImage(int slc)
 {
   if (m_image)
     delete [] m_image;
@@ -564,7 +567,7 @@ RemapRawSlices::getDepthSliceImage(int slc)
 }
 
 QImage
-RemapRawSlices::getWidthSliceImage(int slc)
+RawSlicesPlugin::getWidthSliceImage(int slc)
 {
   if (m_image)
     delete [] m_image;
@@ -641,7 +644,7 @@ RemapRawSlices::getWidthSliceImage(int slc)
 }
 
 QImage
-RemapRawSlices::getHeightSliceImage(int slc)
+RawSlicesPlugin::getHeightSliceImage(int slc)
 {
   if (m_image)
     delete [] m_image;
@@ -728,7 +731,7 @@ RemapRawSlices::getHeightSliceImage(int slc)
 }
 
 QPair<QVariant, QVariant>
-RemapRawSlices::rawValue(int d, int w, int h)
+RawSlicesPlugin::rawValue(int d, int w, int h)
 {
   QPair<QVariant, QVariant> pair;
 
@@ -831,7 +834,7 @@ RemapRawSlices::rawValue(int d, int w, int h)
 }
 
 void
-RemapRawSlices::saveTrimmed(QString trimFile,
+RawSlicesPlugin::saveTrimmed(QString trimFile,
 			    int dmin, int dmax,
 			    int wmin, int wmax,
 			    int hmin, int hmax)
@@ -900,3 +903,7 @@ RemapRawSlices::saveTrimmed(QString trimFile,
 
   m_headerBytes = 13; // to be used for applyMapping function
 }
+
+//-------------------------------
+//-------------------------------
+Q_EXPORT_PLUGIN2(rawslicesplugin, RawSlicesPlugin);

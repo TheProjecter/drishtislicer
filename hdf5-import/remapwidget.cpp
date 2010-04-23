@@ -1,9 +1,9 @@
 #include "global.h"
+#include "common.h"
 #include "remapwidget.h"
 #include "raw2pvl.h"
 #include "savepvldialog.h"
 #include "fileslistdialog.h"
-#include <netcdfcpp.h>
 #include <QFile>
 
 RemapWidget::RemapWidget(QWidget *parent) :
@@ -35,7 +35,6 @@ RemapWidget::RemapWidget(QWidget *parent) :
   m_histogramWidget = 0;
   m_imageWidget = 0;
   m_gradientWidget = 0;
-  m_remapVolume = 0;
   m_slider = 0;
 
 
@@ -48,7 +47,6 @@ void
 RemapWidget::hideWidgets()
 {
   ui.checkBox->hide();
-  ui.colorList->hide();
   ui.butX->hide();
   ui.butY->hide();
   ui.butZ->hide();
@@ -60,9 +58,7 @@ RemapWidget::showWidgets()
   if (!Global::rgbVolume())
     {
       ui.checkBox->show();
-      ui.colorList->show();
       ui.checkBox->setCheckState(Qt::Checked);
-      ui.colorList->setCurrentIndex(0);
     }
   else
     {
@@ -75,6 +71,29 @@ RemapWidget::showWidgets()
   ui.butZ->show();
   ui.butZ->setChecked(true);
 
+}
+
+bool
+RemapWidget::loadPlugin()
+{
+  QString pluginflnm = QFileDialog::getOpenFileName(0,
+						    "Load Plugin",
+						    qApp->applicationDirPath(),
+						    "dll files (*.dll)");
+  QPluginLoader pluginLoader(pluginflnm);
+  QObject *plugin = pluginLoader.instance();
+
+  if (plugin)
+    {
+      m_volInterface = qobject_cast<VolInterface *>(plugin);
+      if (m_volInterface)
+	return true;
+    }
+
+  QMessageBox::information(0, "Error",
+			   QString("Cannot load plugin for %1").arg(m_volumeType));
+
+  return false;
 }
 
 bool
@@ -92,9 +111,6 @@ RemapWidget::setFile(QList<QString> flnm,
   if (m_imageWidget)
     delete m_imageWidget;
 
-  if (m_remapVolume)
-    delete m_remapVolume;
-  
   if (m_gradientWidget)
     delete m_gradientWidget;
 
@@ -104,32 +120,18 @@ RemapWidget::setFile(QList<QString> flnm,
   m_histogramWidget = 0;
   m_imageWidget = 0;
   m_gradientWidget = 0;
-  m_remapVolume = 0;
   m_slider = 0;
 
   m_volumeType = voltype;
   m_volumeFile = flnm;
 
-  if (m_volumeType == RAWVolume)
-    m_remapVolume = new RemapRawVolume();
-  else if (m_volumeType == TOMVolume)
-    m_remapVolume = new RemapTomVolume();
-  else if (m_volumeType == AnalyzeVolume)
-    m_remapVolume = new RemapAnalyze();
-//  else if (m_volumeType == HDF4Volume)
-//    m_remapVolume = new RemapHDF4();
-  else if (m_volumeType == RawSlices)
-    m_remapVolume = new RemapRawSlices();
-  else if (m_volumeType == RawSlabs)
-    m_remapVolume = new RemapRawSlabs();
-//  else if (m_volumeType == NCVolume)
-//    m_remapVolume = new RemapNcVolume();
-  else if (m_volumeType == ImageVolume)
-    m_remapVolume = new RemapImageVolume();
-  else if (m_volumeType == ImageMagickVolume)
-    m_remapVolume = new RemapDicomVolume();
 
-  if (! m_remapVolume->setFile(m_volumeFile))
+  if (!loadPlugin())
+    return false;
+
+  m_volInterface->init();
+
+  if (! m_volInterface->setFile(m_volumeFile))
     return false;
 
   m_histogramWidget = new RemapHistogramWidget();
@@ -143,7 +145,7 @@ RemapWidget::setFile(QList<QString> flnm,
   m_gradientWidget->setGeneralLock(GradientEditor::LockToTop);
   
   int d, w, h;
-  m_remapVolume->gridSize(d, w, h);
+  m_volInterface->gridSize(d, w, h);
 
   m_slider = new MySlider();
   m_slider->set(0, d-1, 0, d-1, 0);
@@ -214,6 +216,13 @@ RemapWidget::setFile(QList<QString> flnm,
   
   showWidgets();
 
+  if (m_volInterface->voxelType() == _UChar)
+    {
+      ui.checkBox->setCheckState(Qt::Unchecked);
+      ui.checkBox->hide();
+      m_histogramWidget->hide();
+    }
+
   return true;
 }
 
@@ -223,7 +232,7 @@ RemapWidget::on_butZ_clicked()
   m_imageWidget->setSliceType(RemapImage::DSlice);
 
   int d, w, h, u0, u1;
-  m_remapVolume->gridSize(d, w, h);
+  m_volInterface->gridSize(d, w, h);
   m_imageWidget->depthUserRange(u0, u1);
   m_slider->set(0, d-1, u0, u1, 0);
 }
@@ -233,7 +242,7 @@ RemapWidget::on_butY_clicked()
   m_imageWidget->setSliceType(RemapImage::WSlice);
 
   int d, w, h, u0, u1;
-  m_remapVolume->gridSize(d, w, h);
+  m_volInterface->gridSize(d, w, h);
   m_imageWidget->widthUserRange(u0, u1);
   m_slider->set(0, w-1, u0, u1, 0);
 }
@@ -243,7 +252,7 @@ RemapWidget::on_butX_clicked()
   m_imageWidget->setSliceType(RemapImage::HSlice);
 
   int d, w, h, u0, u1;
-  m_remapVolume->gridSize(d, w, h);
+  m_volInterface->gridSize(d, w, h);
   m_imageWidget->heightUserRange(u0, u1);
   m_slider->set(0, h-1, u0, u1, 0);
 }
@@ -251,23 +260,23 @@ RemapWidget::on_butX_clicked()
 void
 RemapWidget::newMinMax(float rmin, float rmax)
 {
-  m_remapVolume->setMinMax(rmin, rmax);
+  m_volInterface->setMinMax(rmin, rmax);
   setRawMinMax();
-  m_histogramWidget->setHistogram(m_remapVolume->histogram());
+  m_histogramWidget->setHistogram(m_volInterface->histogram());
 }
 
 void
 RemapWidget::getRawValue(int d, int w, int h)
 {
-  m_imageWidget->setRawValue(m_remapVolume->rawValue(d, w, h));
+  m_imageWidget->setRawValue(m_volInterface->rawValue(d, w, h));
 }
 
 void
 RemapWidget::setRawMinMax()
 {
   float rawMin, rawMax;
-  rawMin = m_remapVolume->rawMin();
-  rawMax = m_remapVolume->rawMax();
+  rawMin = m_volInterface->rawMin();
+  rawMax = m_volInterface->rawMax();
 
   m_histogramWidget->setRawMinMax(rawMin, rawMax);
 
@@ -285,11 +294,11 @@ RemapWidget::getSlice(int slc)
   m_currSlice = slc;
 
   if (ui.butZ->isChecked())
-    m_imageWidget->setImage(m_remapVolume->getDepthSliceImage(m_currSlice));
+    m_imageWidget->setImage(m_volInterface->getDepthSliceImage(m_currSlice));
   else if (ui.butY->isChecked())
-    m_imageWidget->setImage(m_remapVolume->getWidthSliceImage(m_currSlice));
+    m_imageWidget->setImage(m_volInterface->getWidthSliceImage(m_currSlice));
   else if (ui.butX->isChecked())
-    m_imageWidget->setImage(m_remapVolume->getHeightSliceImage(m_currSlice));
+    m_imageWidget->setImage(m_volInterface->getHeightSliceImage(m_currSlice));
 
   m_slider->setValue(slc);
 }
@@ -303,85 +312,21 @@ RemapWidget::newMapping()
   rawMap = m_histogramWidget->rawMap();
   pvlMap = m_histogramWidget->pvlMap();
 
-  m_remapVolume->setMap(rawMap, pvlMap);
+  m_volInterface->setMap(rawMap, pvlMap);
   
   if (ui.butZ->isChecked())
-    m_imageWidget->setImage(m_remapVolume->getDepthSliceImage(m_currSlice));
+    m_imageWidget->setImage(m_volInterface->getDepthSliceImage(m_currSlice));
   else if (ui.butY->isChecked())
-    m_imageWidget->setImage(m_remapVolume->getWidthSliceImage(m_currSlice));
+    m_imageWidget->setImage(m_volInterface->getWidthSliceImage(m_currSlice));
   else if (ui.butX->isChecked())
-    m_imageWidget->setImage(m_remapVolume->getHeightSliceImage(m_currSlice));
+    m_imageWidget->setImage(m_volInterface->getHeightSliceImage(m_currSlice));
 }
 
 void
 RemapWidget::getHistogram()
 {
   // will be called only once
-  m_histogramWidget->setHistogram(m_remapVolume->histogram());
-}
-
-void
-RemapWidget::on_colorList_activated(int index)
-{
-  QGradientStops stops;
-  if (index == 0) // black-white
-    {
-      stops << QGradientStop(0, Qt::black)
-	    << QGradientStop(1, Qt::white);
-    }
-  else if (index == 1) // white-black
-    {
-      stops << QGradientStop(0, Qt::white)
-	    << QGradientStop(1, Qt::black);
-    
-    }
-  else if (index == 2) // white-sepia
-    {
-      stops << QGradientStop(0, Qt::white)
-	    << QGradientStop(1, QColor(112, 66, 20));
-    
-    }
-  else if (index == 3) // sepia-white
-    {
-      stops << QGradientStop(0, QColor(112, 66, 20))
-	    << QGradientStop(1, Qt::white);
-    
-    }
-  else if (index == 4) // white-green
-    {
-      stops << QGradientStop(0, Qt::white)
-	    << QGradientStop(1, QColor(20, 112, 66));
-    
-    }
-  else if (index == 5) // white-blue
-    {
-      stops << QGradientStop(0, Qt::white)
-	    << QGradientStop(1, QColor(66, 20, 112));
-    
-    }
-  else if (index == 6) // yellow-red
-    {
-      stops << QGradientStop(0, QColor(250, 250, 200))
-	    << QGradientStop(0.5, QColor(250, 100, 0))
-	    << QGradientStop(1, Qt::darkRed);
-    
-    }
-  else if (index == 7) // cyan-blue
-    {
-      stops << QGradientStop(0, QColor(200, 250, 250))
-	    << QGradientStop(0.5, QColor(0, 100, 250))
-	    << QGradientStop(1, Qt::darkBlue);
-    
-    }
-  else // default black-white
-    {
-      stops << QGradientStop(0, Qt::black)
-	    << QGradientStop(1, Qt::white);
-    }
-
-  m_gradientWidget->setColorGradient(stops);
-  m_imageWidget->setGradientStops(stops);
-  m_histogramWidget->setGradientStops(stops);
+  m_histogramWidget->setHistogram(m_volInterface->histogram());
 }
 
 void
@@ -432,24 +377,24 @@ RemapWidget::saveImages()
 void
 RemapWidget::extractRawVolume()
 {
-  QString rawFile;
-
-  if (m_volumeType == TOMVolume)
-    rawFile = QFileDialog::getSaveFileName(0,
-					   "Extract volume",
-					   Global::previousDirectory(),
-					   "All Files (*.*)");
-  else
-    {
-      QMessageBox::information(0, "Extract volume",
-			       "Currently available only for TOM files");
-      return;
-    }
-
-  if (rawFile.isEmpty())
-    return;
-
-  ((RemapTomVolume*)m_remapVolume)->extractRawVolume(rawFile);
+//  QString rawFile;
+//
+//  if (m_volumeType == TOMVolume)
+//    rawFile = QFileDialog::getSaveFileName(0,
+//					   "Extract volume",
+//					   Global::previousDirectory(),
+//					   "All Files (*.*)");
+//  else
+//    {
+//      QMessageBox::information(0, "Extract volume",
+//			       "Currently available only for TOM files");
+//      return;
+//    }
+//
+//  if (rawFile.isEmpty())
+//    return;
+//
+//  ((RemapTomVolume*)m_volInterface)->extractRawVolume(rawFile);
 }
 
 void
@@ -481,7 +426,7 @@ RemapWidget::saveTrimmedImages(int dmin, int dmax,
   QVector<QRgb> colorMap = m_imageWidget->colorMap();
   for(int d=dmin; d<=dmax; d++)
     {
-      timage = m_remapVolume->getDepthSliceImage(d);
+      timage = m_volInterface->getDepthSliceImage(d);
       if (timage.format() == QImage::Format_Indexed8)
 	timage.setColorTable(colorMap);  
       timage = timage.copy(hmin, wmin, hsz, wsz);
@@ -517,10 +462,10 @@ RemapWidget::saveTrimmed(int dmin, int dmax,
       if (trimRawFile.isEmpty())
 	return;
 
-      m_remapVolume->saveTrimmed(trimRawFile,
-				 dmin, dmax,
-				 wmin, wmax,
-				 hmin, hmax);
+      m_volInterface->saveTrimmed(trimRawFile,
+				  dmin, dmax,
+				  wmin, wmax,
+				  hmin, hmax);
 
       QMessageBox::information(0, "Save RGB Volume", "Done");
       return;
@@ -551,7 +496,7 @@ RemapWidget::saveTrimmed(int dmin, int dmax,
       if (m_volumeType == TOMVolume) volumeType = 1;
       if (m_volumeType == AnalyzeVolume) volumeType = 2;
 
-      Raw2Pvl::savePvl(m_remapVolume,
+      Raw2Pvl::savePvl(m_volInterface,
 		       volumeType,
 		       dmin, dmax, wmin, wmax, hmin, hmax,
 		       m_timeseriesFiles);
@@ -570,7 +515,7 @@ RemapWidget::saveTrimmed(int dmin, int dmax,
 //  int dsz=dmax-dmin+1;
 //  int wsz=wmax-wmin+1;
 //  int hsz=hmax-hmin+1;
-//  m_remapVolume->gridSize(d, w, h);
+//  m_volInterface->gridSize(d, w, h);
 //  if (d == dsz &&
 //      w == wsz &&
 //      h == hsz &&
@@ -579,7 +524,7 @@ RemapWidget::saveTrimmed(int dmin, int dmax,
 //       m_volumeType == AnalyzeVolume) )
 //    {
 //      if (m_volumeType == AnalyzeVolume)
-//	trimRawFile = ((RemapAnalyze*)m_remapVolume)->imgFile();
+//	trimRawFile = ((RemapAnalyze*)m_volInterface)->imgFile();
 //      else
 //	trimRawFile = m_volumeFile[0];
 //    }
@@ -593,10 +538,10 @@ RemapWidget::saveTrimmed(int dmin, int dmax,
 //      if (trimRawFile.isEmpty())
 //	return;
 //
-//      m_remapVolume->saveTrimmed(trimRawFile,
-//				 dmin, dmax,
-//				 wmin, wmax,
-//				 hmin, hmax);
+//      m_volInterface->saveTrimmed(trimRawFile,
+//				    dmin, dmax,
+//				    wmin, wmax,
+//				    hmin, hmax);
 //    }
 //
 //  QFileInfo ftrf(trimRawFile);
@@ -638,8 +583,8 @@ RemapWidget::saveTrimmed(int dmin, int dmax,
 //  if (m_volumeType == TOMVolume)
 //    {
 //      float vx, vy, vz;
-//      m_remapVolume->voxelSize(vx, vy, vz);
-//      QString desc = m_remapVolume->description();
+//      m_volInterface->voxelSize(vx, vy, vz);
+//      QString desc = m_volInterface->description();
 //      savePvlDialog.setVoxelUnit(Raw2Pvl::_Micron);
 //      savePvlDialog.setVoxelSize(vx, vy, vz);
 //      savePvlDialog.setDescription(desc);
@@ -647,7 +592,7 @@ RemapWidget::saveTrimmed(int dmin, int dmax,
 //  else if (m_volumeType == AnalyzeVolume)
 //    {
 //      float vx, vy, vz;
-//      m_remapVolume->voxelSize(vx, vy, vz);
+//      m_volInterface->voxelSize(vx, vy, vz);
 //      savePvlDialog.setVoxelSize(vx, vy, vz);
 //    }
 //
@@ -735,8 +680,8 @@ RemapWidget::reduceGridSize(QString trimRawFile,
                             Global::previousDirectory(),
 	       		    "RAW Files (*.raw)");
       
-      int voxelType = m_remapVolume->voxelType();
-      int headerBytes = m_remapVolume->headerBytes();
+      int voxelType = m_volInterface->voxelType();
+      int headerBytes = m_volInterface->headerBytes();
 
       Raw2Pvl::subsampleVolume(trimRawFile,
 			       newTrimRawFile,
@@ -767,10 +712,10 @@ void RemapWidget::applyMapping(QString rawFilename,
 			       int d, int w, int h,
 			       int volumeFilter)
 {
-//  int voxelType = m_remapVolume->voxelType();
-//  int headerBytes = m_remapVolume->headerBytes();
-//  QList<float> rawMap = m_remapVolume->rawMap();
-//  QList<uchar> pvlMap = m_remapVolume->pvlMap();
+//  int voxelType = m_volInterface->voxelType();
+//  int headerBytes = m_volInterface->headerBytes();
+//  QList<float> rawMap = m_volInterface->rawMap();
+//  QList<uchar> pvlMap = m_volInterface->pvlMap();
 //  QString sourceFilename = rawFilename;
 //  
 //  if (volumeFilter > 0)
@@ -818,10 +763,10 @@ RemapWidget::createPVL(QString rawFilename,
 		       float vx, float vy, float  vz,
 		       QString description)
 { 
-//  QList<float> rawMap = m_remapVolume->rawMap();
-//  QList<uchar> pvlMap = m_remapVolume->pvlMap();
-//  uchar voxelType = m_remapVolume->voxelType();  
-//  int headerBytes = m_remapVolume->headerBytes();
+//  QList<float> rawMap = m_volInterface->rawMap();
+//  QList<uchar> pvlMap = m_volInterface->pvlMap();
+//  uchar voxelType = m_volInterface->voxelType();  
+//  int headerBytes = m_volInterface->headerBytes();
 //  //headerBytes = 13;
 //
 //  //------------------ Saving information into netCDF file ----------------

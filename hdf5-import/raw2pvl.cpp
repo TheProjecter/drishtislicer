@@ -1,7 +1,7 @@
 #include "global.h"
+#include "common.h"
 #include "staticfunctions.h"
 #include "raw2pvl.h"
-#include <netcdfcpp.h>
 #include <algorithm>
 #include <stdlib.h>
 #include <string.h>
@@ -16,13 +16,6 @@
 #include "volumefilemanager.h"
 #include "blockfilewriter.h"
 
-#ifdef Q_WS_WIN
-#include <float.h>
-#define ISNAN(v) _isnan(v)
-#else
-#define ISNAN(v) isnan(v)
-#endif
-
 #define REMAPVOLUME()							\
   {									\
     for(uint j=0; j<width*height; j++)					\
@@ -30,7 +23,7 @@
 	float v = ptr[j];						\
 	int idx;							\
 	float frc;							\
-	if (v <= rawMap[0] || ISNAN(v))					\
+	if (v <= rawMap[0])					\
 	  {								\
 	    idx = 0;							\
 	    frc = 0;							\
@@ -1039,6 +1032,7 @@ getBlockSize()
   
   bool ok = false;
   QStringList bsz;
+  bsz << "16";
   bsz << "32";
   bsz << "64";
   bsz << "128";
@@ -1046,7 +1040,7 @@ getBlockSize()
 		   "Block Size",
 		   "Block size for preprocessed volume",
 		   bsz,
-		   0,
+		   1,
 		   false,
 		   &ok);
   if (ok)
@@ -1263,12 +1257,12 @@ Raw2Pvl::savePvlHeader(QString pvlFilename,
       
   {      
     QString vstr;
-    if (voxelType == Raw2Pvl::_UChar)      vstr = "unsigned char";
-    else if (voxelType == Raw2Pvl::_Char)  vstr = "char";
-    else if (voxelType == Raw2Pvl::_UShort)vstr = "unsigned short";
-    else if (voxelType == Raw2Pvl::_Short) vstr = "short";
-    else if (voxelType == Raw2Pvl::_Int)   vstr = "int";
-    else if (voxelType == Raw2Pvl::_Float) vstr = "float";
+    if (voxelType == _UChar)      vstr = "unsigned char";
+    else if (voxelType == _Char)  vstr = "char";
+    else if (voxelType == _UShort)vstr = "unsigned short";
+    else if (voxelType == _Short) vstr = "short";
+    else if (voxelType == _Int)   vstr = "int";
+    else if (voxelType == _Float) vstr = "float";
     
     QDomElement de0 = doc.createElement("voxeltype");
     QDomText tn0;
@@ -1288,16 +1282,16 @@ Raw2Pvl::savePvlHeader(QString pvlFilename,
 
   {      
     QString vstr;
-    if (voxelUnit == Raw2Pvl::_Nounit)         vstr = "no units";
-    else if (voxelUnit == Raw2Pvl::_Angstrom)  vstr = "angstrom";
-    else if (voxelUnit == Raw2Pvl::_Nanometer) vstr = "nanometer";
-    else if (voxelUnit == Raw2Pvl::_Micron)    vstr = "micron";
-    else if (voxelUnit == Raw2Pvl::_Millimeter)vstr = "millimeter";
-    else if (voxelUnit == Raw2Pvl::_Centimeter)vstr = "centimeter";
-    else if (voxelUnit == Raw2Pvl::_Meter)     vstr = "meter";
-    else if (voxelUnit == Raw2Pvl::_Kilometer) vstr = "kilometer";
-    else if (voxelUnit == Raw2Pvl::_Parsec)    vstr = "parsec";
-    else if (voxelUnit == Raw2Pvl::_Kiloparsec)vstr = "kiloparsec";
+    if (voxelUnit == _Nounit)         vstr = "no units";
+    else if (voxelUnit == _Angstrom)  vstr = "angstrom";
+    else if (voxelUnit == _Nanometer) vstr = "nanometer";
+    else if (voxelUnit == _Micron)    vstr = "micron";
+    else if (voxelUnit == _Millimeter)vstr = "millimeter";
+    else if (voxelUnit == _Centimeter)vstr = "centimeter";
+    else if (voxelUnit == _Meter)     vstr = "meter";
+    else if (voxelUnit == _Kilometer) vstr = "kilometer";
+    else if (voxelUnit == _Parsec)    vstr = "parsec";
+    else if (voxelUnit == _Kiloparsec)vstr = "kiloparsec";
     
     QDomElement de0 = doc.createElement("voxelunit");
     QDomText tn0;
@@ -1379,7 +1373,7 @@ Raw2Pvl::savePvlHeader(QString pvlFilename,
 }
 
 void
-Raw2Pvl::savePvl(AbstractRemapVolume* remapVolume,
+Raw2Pvl::savePvl(VolInterface* volInterface,
 		 int volumeType,
 		 int dmin, int dmax,
 		 int wmin, int wmax,
@@ -1388,14 +1382,14 @@ Raw2Pvl::savePvl(AbstractRemapVolume* remapVolume,
 {
   //------------------------------------------------------
   int rvdepth, rvwidth, rvheight;    
-  remapVolume->gridSize(rvdepth, rvwidth, rvheight);
+  volInterface->gridSize(rvdepth, rvwidth, rvheight);
 
   int dsz=dmax-dmin+1;
   int wsz=wmax-wmin+1;
   int hsz=hmax-hmin+1;
 
-  uchar voxelType = remapVolume->voxelType();  
-  int headerBytes = remapVolume->headerBytes();
+  uchar voxelType = volInterface->voxelType();  
+  int headerBytes = volInterface->headerBytes();
 
   int bpv = 1;
   if (voxelType == _UChar) bpv = 1;
@@ -1437,32 +1431,20 @@ Raw2Pvl::savePvl(AbstractRemapVolume* remapVolume,
 
   // -- get saving parameters for processed file
   SavePvlDialog savePvlDialog;
-  if (volumeType == 1)
-    {
-      float vx, vy, vz;
-      remapVolume->voxelSize(vx, vy, vz);
-      QString desc = remapVolume->description();
-      savePvlDialog.setVoxelUnit(Raw2Pvl::_Micron);
-      savePvlDialog.setVoxelSize(vx, vy, vz);
-      savePvlDialog.setDescription(desc);
-    }
-  else if (volumeType == 2)
-    {
-      float vx, vy, vz;
-      remapVolume->voxelSize(vx, vy, vz);
-      savePvlDialog.setVoxelSize(vx, vy, vz);
-    }
-
+  float vx, vy, vz;
+  volInterface->voxelSize(vx, vy, vz);
+  savePvlDialog.setVoxelUnit(volInterface->voxelUnit());
+  savePvlDialog.setVoxelSize(vx, vy, vz);
+  savePvlDialog.setDescription(volInterface->description());
   savePvlDialog.exec();
 
   int spread = savePvlDialog.volumeFilter();
   int voxelUnit = savePvlDialog.voxelUnit();
   QString description = savePvlDialog.description();
-  float vx, vy, vz;
   savePvlDialog.voxelSize(vx, vy, vz);
 
-  QList<float> rawMap = remapVolume->rawMap();
-  QList<uchar> pvlMap = remapVolume->pvlMap();
+  QList<float> rawMap = volInterface->rawMap();
+  QList<uchar> pvlMap = volInterface->pvlMap();
 
   int nbytes = rvwidth*rvheight*bpv;
   double *filtervol = new double[wsz2*hsz2];
@@ -1513,7 +1495,7 @@ Raw2Pvl::savePvl(AbstractRemapVolume* remapVolume,
 	  rawflnm = QFileInfo(ftpvl.absolutePath(),
 			      ftraw.completeBaseName() + ".raw").absoluteFilePath();
 
-	  remapVolume->replaceFile(timeseriesFiles[tsf]);
+	  volInterface->replaceFile(timeseriesFiles[tsf]);
 	}
 
       int blocksize = getBlockSize();
@@ -1584,30 +1566,30 @@ Raw2Pvl::savePvl(AbstractRemapVolume* remapVolume,
 		{
 		  if (d == d0)
 		    {
-		      remapVolume->getDepthSlice(d, val[spread]);
+		      volInterface->getDepthSlice(d, val[spread]);
 		      for(int i=-spread; i<0; i++)
 			{
 			  if (d+i >= 0)
-			    remapVolume->getDepthSlice(d+i, val[spread+i]);
+			    volInterface->getDepthSlice(d+i, val[spread+i]);
 			  else
-			    remapVolume->getDepthSlice(0, val[spread+i]);
+			    volInterface->getDepthSlice(0, val[spread+i]);
 			}
 		      
 		      for(int i=1; i<=spread; i++)
 			{
 			  if (d+i < rvdepth)
-			    remapVolume->getDepthSlice(d+i, val[spread+i]);
+			    volInterface->getDepthSlice(d+i, val[spread+i]);
 			  else
-			    remapVolume->getDepthSlice(rvdepth-1, val[spread+i]);
+			    volInterface->getDepthSlice(rvdepth-1, val[spread+i]);
 			}
 		    }
 		  else if (d < rvdepth-spread)
-		    remapVolume->getDepthSlice(d+spread, val[2*spread]);
+		    volInterface->getDepthSlice(d+spread, val[2*spread]);
 		  else
-		    remapVolume->getDepthSlice(rvdepth-1, val[2*spread]);
+		    volInterface->getDepthSlice(rvdepth-1, val[2*spread]);
 		}
 	      else
-		remapVolume->getDepthSlice(d, raw);
+		volInterface->getDepthSlice(d, raw);
 	      
 	      if (spread > 0)
 		{

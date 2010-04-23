@@ -6,7 +6,7 @@
 
 RESOURCES = hdf5-import.qrc
 
-TEMPLATE = vcapp
+TEMPLATE = app
 
 DEPENDPATH += .
 
@@ -22,34 +22,19 @@ TARGET = hdf5import
 win32 {
 
 INCLUDEPATH += . \
-	       c:\drishtilib\netcdf\include \
-	       c:\drishtilib\hdf4\include \
-	       %MAGICK_HOME%\include \
 	       c:\drishtilib\hdf5\include
 
-LIBPATH += c:\drishtilib\netcdf\lib \
-	   c:\drishtilib\hdf4\dll \
-	   %MAGICK_HOME%\lib \
-	   c:\drishtilib\hdf5\lib \
+LIBPATH += c:\drishtilib\hdf5\lib \
 	   c:\drishtilib\hdf5\szip\lib \
 	   c:\drishtilib\hdf5\zlib\lib
 
 LIBS += hdf5_cpp.lib \
 	hdf5.lib \
-#	hd423m.lib \
-#	mfhdf_fcstubdll.lib \
-#	hdf_fcstubdll.lib \
-#	hm423m.lib \
-#	netcdf.lib \
-	core_rl_magick++_.lib \
-	core_rl_magick_.lib \
-	core_rl_wand_.lib \
-	szlib.lib 
-#	zlib.lib
+	szlib.lib \
+	zlib.lib
 
 QMAKE_LFLAGS += /NODEFAULTLIB:msvcrt.lib  \
 	        /NODEFAULTLIB:msvcprt.lib
-
 }
 
 unix {
@@ -96,42 +81,31 @@ LIBS +=	-lnetcdf \
 	-ljpeg
 }
 
-FORMS += loadrawdialog.ui \
-	 remapwidget.ui \
+FORMS += remapwidget.ui \
 	 savepvldialog.ui \
 	 drishtiimport.ui \
 	 fileslistdialog.ui
 
 # Input
 HEADERS += global.h \
+	   common.h \
 	   staticfunctions.h \
 	   fileslistdialog.h \
 	   remapwidget.h \
            remaphistogramline.h \
            remaphistogramwidget.h \
 	   remapimage.h \
-	   abstractremapvolume.h \
-           remapncvolume.h \
-           remaprawvolume.h \
-	   remapimagevolume.h \
-	   remapdicomvolume.h \
-	   remaprawslices.h \
-	   remaprawslabs.h \
 	   gradienteditor.h \
 	   gradienteditorwidget.h \
-	   loadrawdialog.h \
 	   dcolordialog.h \
 	   dcolorwheel.h \
 	   drishtiimport.h \
 	   myslider.h \
 	   raw2pvl.h \
 	   savepvldialog.h \
-	   tomhead.h \
-	   remaptomvolume.h \
-	   remapanalyze.h \
-	   remaphdf4.h \
 	   volumefilemanager.h \
-	   blockfilewriter.h
+	   blockfilewriter.h \
+	   volinterface.h
 
 SOURCES += global.cpp \
 	   staticfunctions.cpp \
@@ -141,24 +115,14 @@ SOURCES += global.cpp \
            remaphistogramline.cpp \
            remaphistogramwidget.cpp \
 	   remapimage.cpp \
-           remapncvolume.cpp \
-           remaprawvolume.cpp \
-	   remapimagevolume.cpp \
-	   remapdicomvolume.cpp \
-	   remaprawslices.cpp \
-	   remaprawslabs.cpp \
 	   gradienteditor.cpp \
 	   gradienteditorwidget.cpp \
-	   loadrawdialog.cpp \
 	   dcolordialog.cpp \
 	   dcolorwheel.cpp \
 	   drishtiimport.cpp \
 	   myslider.cpp \
 	   raw2pvl.cpp \
 	   savepvldialog.cpp \
-	   remaptomvolume.cpp \
-	   remapanalyze.cpp \
-	   remaphdf4.cpp \
 	   volumefilemanager.cpp \
 	   blockfilewriter.cpp
 

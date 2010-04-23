@@ -191,6 +191,18 @@ RemapBvf::setFile(QString fl)
 	{
 	  blockSize = (dlist.at(i).toElement().text()).toInt();
 	}
+      else if (dlist.at(i).nodeName() == "rawmap")
+	{
+	  QStringList str = (dlist.at(i).toElement().text()).split(" ", QString::SkipEmptyParts);
+	  for(int is=0; is<str.count(); is++)
+	    m_rawMap << str[is].toFloat();
+	}
+      else if (dlist.at(i).nodeName() == "pvlmap")
+	{
+	  QStringList str = (dlist.at(i).toElement().text()).split(" ", QString::SkipEmptyParts);
+	  for(int is=0; is<str.count(); is++)
+	    m_pvlMap << str[is].toFloat();
+	}
     }
 
   m_headerBytes = m_skipBytes = 0;
@@ -279,7 +291,8 @@ RemapBvf::initializeHistogram()
 	m_histogram.append(0);
       m_rawMax = m_rawMin + 255;
     }
-  else 
+  else if (m_voxelType == _UShort ||
+	   m_voxelType == _Short)
     {
       m_rawMin = 0;
       if (m_voxelType == _UShort) m_rawMin = 0;
@@ -287,6 +300,21 @@ RemapBvf::initializeHistogram()
       for(int i=0; i<65536; i++)
 	m_histogram.append(0);
       m_rawMax = m_rawMin + 65535;
+    }
+  else
+    {
+      if (m_rawMap.count() > 0)
+	{
+	  m_rawMin = m_rawMap[0];
+	  m_rawMax = m_rawMap[m_rawMap.count()-1];
+	}
+      else
+	{
+	  m_rawMin = 0;
+	  m_rawMax = 1000;
+	}
+      for(int i=0; i<65536; i++)
+	m_histogram.append(0);
     }
 }
 

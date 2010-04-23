@@ -1,9 +1,8 @@
-#ifndef REMAPANALYZE_H
-#define REMAPANALYZE_H
+#ifndef ANALYZEPLUGIN_H
+#define ANALYZEPLUGIN_H
 
-#include <QtGui>
-
-#include "abstractremapvolume.h"
+#include <QObject>
+#include "volinterface.h"
 
 //---------------------------------------------------------        
 struct analyze_header_key          		/*      header_key       */
@@ -73,54 +72,79 @@ struct analyze_dsr                 		/*      dsr              */
     };                     			/* total=348 */
 //---------------------------------------------------------        
 
-class RemapAnalyze : public AbstractRemapVolume
+class AnalyzePlugin : public QObject, VolInterface
 {
   Q_OBJECT
+  Q_INTERFACES(VolInterface)
 
  public :
-  RemapAnalyze();
-  ~RemapAnalyze();
+  void init();
+  void clear();
 
-  QString imgFile();
-  void voxelSize(float&, float&, float&);
-
-  bool setFile(QList<QString>);
-  void setVoxelType(int);
-  void setGridSize(int, int, int);
-  void setSkipHeaderBytes(int);
+  bool setFile(QStringList);
+  void replaceFile(QString);
 
   void gridSize(int&, int&, int&);
-  QList<uint> histogram();
+  void voxelSize(float&, float&, float&);
+  QString description();
+  int voxelUnit();
+  int voxelType();
+  int headerBytes();
 
+  QList<uint> histogram();
+  
   void setMinMax(float, float);
   float rawMin();
-  float rawMax();  
+  float rawMax();
+   
+  void setMap(QList<float>, QList<uchar>);
 
-  void setMap(QList<float>,
-	      QList<uchar>);
+  QList<float> rawMap();
+  QList<uchar> pvlMap();
 
   void getDepthSlice(int, uchar*);
+
   QImage getDepthSliceImage(int);
   QImage getWidthSliceImage(int);
   QImage getHeightSliceImage(int);
 
   QPair<QVariant,QVariant> rawValue(int, int, int);
 
-
-  void saveTrimmed(QString,
-		   int, int, int, int, int, int);
+  void saveTrimmed(QString, int, int, int, int, int, int);
 
  private :
+  QStringList m_fileName;
+  int m_depth, m_width, m_height;
+  int m_voxelUnit;
+  int m_voxelType;
+  int m_headerBytes;
+  float m_voxelSizeX;
+  float m_voxelSizeY;
+  float m_voxelSizeZ;
+  QString m_description;
+  
+  float m_rawMin, m_rawMax;
+  QList<uint> m_histogram;
+
+  QList<float> m_rawMap;
+  QList<uchar> m_pvlMap;
+   
+  unsigned char *m_image;
+
   struct analyze_dsr m_analyzeHeader;
   QString m_hdrFile, m_imgFile;
-
   bool m_byteSwap;
+
   int m_skipBytes;
   int m_bytesPerVoxel;
 
   void findMinMax();
   void generateHistogram();
   void findMinMaxandGenerateHistogram();
+
+  bool checkExtension(QString, const char*);
+  void swapbytes(uchar*, int);
+  void swapbytes(uchar*, int, int);
 };
 
 #endif
