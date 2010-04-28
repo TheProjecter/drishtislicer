@@ -79,6 +79,34 @@ BlockReader::getBlock(int level, int blkno, uchar* block)
 	  QString dataname = QString("lod-%1").arg(il);
 	  m_hdf5dataset[il] = m_hdf5file->openDataSet(dataname.toAscii().data());
 	}
+
+      m_dataType.copy(m_hdf5dataset[0]);
+
+//      if (m_voxelType == _UChar) dataType.copy(DataType(PredType::NATIVE_UCHAR));
+//      else if (m_voxelType == _Char) dataType.copy(DataType(PredType::NATIVE_CHAR));
+//      else if (m_voxelType == _UShort) dataType.copy(DataType(PredType::NATIVE_USHORT));
+//      else if (m_voxelType == _Short) dataType.copy(DataType(PredType::NATIVE_SHORT));
+//      else if (m_voxelType == _Int) dataType.copy(DataType(PredType::NATIVE_INT));
+//      else if (m_voxelType == _Float) dataType.copy(DataType(PredType::NATIVE_FLOAT));
+//      else if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+//	{
+//	  size_t nRgb = 3;
+//	  if (m_voxelType == _Rgba) nRgb = 4;
+//	  
+//	  typedef struct rgbstruct
+//	  {
+//	    uchar r, g, b;
+//	  } rgb;
+//	  
+//	  CompType rgbType(nRgb);
+//	  rgbType.insertMember("r", 0, PredType::NATIVE_UCHAR);
+//	  rgbType.insertMember("g", 1, PredType::NATIVE_UCHAR);
+//	  rgbType.insertMember("b", 2, PredType::NATIVE_UCHAR);
+//	  if (nRgb == 4)
+//	    rgbType.insertMember("a", 3, PredType::NATIVE_UCHAR);
+//	  
+//	  m_dataType.copy(DataType(rgbType));
+//	}
     }
 
   DataSpace dataspace = m_hdf5dataset[level].getSpace();
@@ -97,36 +125,41 @@ BlockReader::getBlock(int level, int blkno, uchar* block)
   dimsm[2] = bb;
   DataSpace memspace( 3, dimsm );
 
-  if (m_voxelType == _UChar)
-    m_hdf5dataset[level].read( block,
-			       PredType::NATIVE_UCHAR,
-			       memspace,
-			       dataspace );
-  else if (m_voxelType == _Char)
-    m_hdf5dataset[level].read( block,
-			       PredType::NATIVE_CHAR,
-			       memspace,
-			       dataspace );
-  else if (m_voxelType == _UShort)
-    m_hdf5dataset[level].read( block,
-			       PredType::NATIVE_USHORT,
-			       memspace,
-			       dataspace );
-  else if (m_voxelType == _Short)
-    m_hdf5dataset[level].read( block,
-			       PredType::NATIVE_SHORT,
-			       memspace,
-			       dataspace );
-  else if (m_voxelType == _Int)
-    m_hdf5dataset[level].read( block,
-			       PredType::NATIVE_INT,
-			       memspace,
-			       dataspace );
-  else if (m_voxelType == _Float)
-    m_hdf5dataset[level].read( block,
-			       PredType::NATIVE_FLOAT,
-			       memspace,
-			       dataspace );
+  m_hdf5dataset[level].read( block,
+			     m_dataType,
+			     memspace,
+			     dataspace );
+
+//  if (m_voxelType == _UChar)
+//    m_hdf5dataset[level].read( block,
+//			       PredType::NATIVE_UCHAR,
+//			       memspace,
+//			       dataspace );
+//  else if (m_voxelType == _Char)
+//    m_hdf5dataset[level].read( block,
+//			       PredType::NATIVE_CHAR,
+//			       memspace,
+//			       dataspace );
+//  else if (m_voxelType == _UShort)
+//    m_hdf5dataset[level].read( block,
+//			       PredType::NATIVE_USHORT,
+//			       memspace,
+//			       dataspace );
+//  else if (m_voxelType == _Short)
+//    m_hdf5dataset[level].read( block,
+//			       PredType::NATIVE_SHORT,
+//			       memspace,
+//			       dataspace );
+//  else if (m_voxelType == _Int)
+//    m_hdf5dataset[level].read( block,
+//			       PredType::NATIVE_INT,
+//			       memspace,
+//			       dataspace );
+//  else if (m_voxelType == _Float)
+//    m_hdf5dataset[level].read( block,
+//			       PredType::NATIVE_FLOAT,
+//			       memspace,
+//			       dataspace );
 }
 
 

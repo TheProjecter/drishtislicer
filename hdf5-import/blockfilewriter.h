@@ -75,6 +75,7 @@ class BlockFileWriter
   H5File *m_hdf5file;
   DataSet m_hdf5dataset[10];
   DataSet m_lowres;
+  IntType m_dataType;
 
   void reset();
 

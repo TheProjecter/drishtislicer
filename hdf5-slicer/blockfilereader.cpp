@@ -137,11 +137,13 @@ void BlockFileReader::setVoxelType(int vt)
   m_voxelType = vt;
   m_bytesPerVoxel = 1;
   if (m_voxelType == _UChar) m_bytesPerVoxel = 1;
-  if (m_voxelType == _Char) m_bytesPerVoxel = 1;
-  if (m_voxelType == _UShort) m_bytesPerVoxel = 2;
-  if (m_voxelType == _Short) m_bytesPerVoxel = 2;
-  if (m_voxelType == _Int) m_bytesPerVoxel = 4;
-  if (m_voxelType == _Float) m_bytesPerVoxel = 4;
+  else if (m_voxelType == _Char) m_bytesPerVoxel = 1;
+  else if (m_voxelType == _UShort) m_bytesPerVoxel = 2;
+  else if (m_voxelType == _Short) m_bytesPerVoxel = 2;
+  else if (m_voxelType == _Int) m_bytesPerVoxel = 4;
+  else if (m_voxelType == _Float) m_bytesPerVoxel = 4;
+  else if (m_voxelType == _Rgb) m_bytesPerVoxel = 3;
+  else if (m_voxelType == _Rgba) m_bytesPerVoxel = 4;
 }
 
 QString BlockFileReader::fileName() { return m_filename; }
@@ -212,11 +214,39 @@ BlockFileReader::getBlock(int dno, int wno, int hno,
 void
 BlockFileReader::loadDict()
 {
+  IntType datatype;  
+//  if (m_voxelType == _UChar) datatype.copy(DataType(PredType::NATIVE_UCHAR));
+//  else if (m_voxelType == _Char) datatype.copy(DataType(PredType::NATIVE_CHAR));
+//  else if (m_voxelType == _UShort) datatype.copy(DataType(PredType::NATIVE_USHORT));
+//  else if (m_voxelType == _Short) datatype.copy(DataType(PredType::NATIVE_SHORT));
+//  else if (m_voxelType == _Int) datatype.copy(DataType(PredType::NATIVE_INT));
+//  else if (m_voxelType == _Float) datatype.copy(DataType(PredType::NATIVE_FLOAT));
+//  else if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+//    {
+//      size_t nRgb = 3;
+//      if (m_voxelType == _Rgba) nRgb = 4;
+//
+//      typedef struct rgbstruct
+//      {
+//	uchar r, g, b;
+//      } rgb;
+//  
+//      CompType rgbType(nRgb);
+//      rgbType.insertMember("r", 0, PredType::NATIVE_UCHAR);
+//      rgbType.insertMember("g", 1, PredType::NATIVE_UCHAR);
+//      rgbType.insertMember("b", 2, PredType::NATIVE_UCHAR);
+//      if (nRgb == 4)
+//	rgbType.insertMember("a", 3, PredType::NATIVE_UCHAR);
+//
+//      datatype.copy(DataType(rgbType));
+//    }
+
   QString flnm = m_baseFilename + ".h5";
   H5File h5file(flnm.toAscii().data(),
 		H5F_ACC_RDONLY);
 
   DataSet dataset = h5file.openDataSet("lowres");
+  datatype.copy(dataset);
 
   Attribute attrib = dataset.openAttribute("sslevel");
   attrib.read(PredType::NATIVE_UCHAR, &m_sslevel);
@@ -231,36 +261,41 @@ BlockFileReader::loadDict()
   DataSpace memspace(3, dims);
 
   m_ssvol = new uchar[m_ssd*m_ssw*m_ssh*m_bytesPerVoxel];
-  if (m_voxelType == _UChar)
-    dataset.read( m_ssvol,
-		  PredType::NATIVE_UCHAR,
-		  memspace,
-		  dataspace );
-  else if (m_voxelType == _Char)
-    dataset.read( m_ssvol,
-		  PredType::NATIVE_CHAR,
-		  memspace,
-		  dataspace );
-  else if (m_voxelType == _UShort)
-    dataset.read( m_ssvol,
-		  PredType::NATIVE_USHORT,
-		  memspace,
-		  dataspace );
-  else if (m_voxelType == _Short)
-    dataset.read( m_ssvol,
-		  PredType::NATIVE_SHORT,
-		  memspace,
-		  dataspace );
-  else if (m_voxelType == _Int)
-    dataset.read( m_ssvol,
-		  PredType::NATIVE_INT,
-		  memspace,
-		  dataspace );
-  else if (m_voxelType == _Float)
-    dataset.read( m_ssvol,
-		  PredType::NATIVE_FLOAT,
-		  memspace,
-		  dataspace );
+  dataset.read( m_ssvol,
+		datatype,
+		memspace,
+		dataspace );
+
+//  if (m_voxelType == _UChar)
+//    dataset.read( m_ssvol,
+//		  PredType::NATIVE_UCHAR,
+//		  memspace,
+//		  dataspace );
+//  else if (m_voxelType == _Char)
+//    dataset.read( m_ssvol,
+//		  PredType::NATIVE_CHAR,
+//		  memspace,
+//		  dataspace );
+//  else if (m_voxelType == _UShort)
+//    dataset.read( m_ssvol,
+//		  PredType::NATIVE_USHORT,
+//		  memspace,
+//		  dataspace );
+//  else if (m_voxelType == _Short)
+//    dataset.read( m_ssvol,
+//		  PredType::NATIVE_SHORT,
+//		  memspace,
+//		  dataspace );
+//  else if (m_voxelType == _Int)
+//    dataset.read( m_ssvol,
+//		  PredType::NATIVE_INT,
+//		  memspace,
+//		  dataspace );
+//  else if (m_voxelType == _Float)
+//    dataset.read( m_ssvol,
+//		  PredType::NATIVE_FLOAT,
+//		  memspace,
+//		  dataspace );
 
   h5file.close();
 

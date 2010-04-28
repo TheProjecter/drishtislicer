@@ -1081,10 +1081,6 @@ getSaveRawFile()
 QString
 getRawFilename(QString pvlFilename)
 {
-//  QString rawfile = QFileDialog::getSaveFileName(0,
-//				 "Save processed volume",
-//				 QFileInfo(pvlFilename).absolutePath(),
-//				 "RAW Files (*.raw)");
   QString rawfile = pvlFilename;
   rawfile.chop(3);
   rawfile += "rawbvf";
@@ -1263,6 +1259,8 @@ Raw2Pvl::savePvlHeader(QString pvlFilename,
     else if (voxelType == _Short) vstr = "short";
     else if (voxelType == _Int)   vstr = "int";
     else if (voxelType == _Float) vstr = "float";
+    else if (voxelType == _Rgb)   vstr = "rgb";
+    else if (voxelType == _Rgba)  vstr = "rgba";
     
     QDomElement de0 = doc.createElement("voxeltype");
     QDomText tn0;
@@ -1317,13 +1315,6 @@ Raw2Pvl::savePvlHeader(QString pvlFilename,
     topElement.appendChild(de0);
   }
 
-//  {      
-//    QDomElement de0 = doc.createElement("maxfilesize");
-//    QDomText tn0;
-//    tn0 = doc.createTextNode(QString("%1").arg(maxFileSize));
-//    de0.appendChild(tn0);
-//    topElement.appendChild(de0);
-//  }
   {      
     QDomElement de0 = doc.createElement("blocksize");
     QDomText tn0;
@@ -1331,13 +1322,6 @@ Raw2Pvl::savePvlHeader(QString pvlFilename,
     de0.appendChild(tn0);
     topElement.appendChild(de0);
   }
-//  {      
-//    QDomElement de0 = doc.createElement("border");
-//    QDomText tn0;
-//    tn0 = doc.createTextNode(QString("%1").arg(border));
-//    de0.appendChild(tn0);
-//    topElement.appendChild(de0);
-//  }
   
   {      
     QString vstr;
@@ -1398,10 +1382,9 @@ Raw2Pvl::savePvl(VolInterface* volInterface,
   else if (voxelType == _Short) bpv = 2;
   else if (voxelType == _Int) bpv = 4;
   else if (voxelType == _Float) bpv = 4;
+  else if (voxelType == _Rgb) bpv = 3;
+  else if (voxelType == _Rgba) bpv = 4;
 
-  //*** max 1Gb per slab
-//  int slabSize;
-//  slabSize = (1024*1024*1024)/(bpv*wsz*hsz);
   //------------------------------------------------------
 
   QString pvlFilename = getPvlNcFilename();
@@ -1411,7 +1394,11 @@ Raw2Pvl::savePvl(VolInterface* volInterface,
       return;
     }
 
-  bool saveRawFile = getSaveRawFile();;
+
+  bool saveRawFile = false;
+  if (voxelType != _Rgb && voxelType != _Rgba)
+    saveRawFile = getSaveRawFile();
+
   QString rawfile;
   if (saveRawFile) rawfile = getRawFilename(pvlFilename);
   if (rawfile.isEmpty())
@@ -1504,7 +1491,10 @@ Raw2Pvl::savePvl(VolInterface* volInterface,
       pvlFileManager.setDepth(dsz2);
       pvlFileManager.setWidth(wsz2);
       pvlFileManager.setHeight(hsz2);
-      pvlFileManager.setVoxelType(0); // uchar
+      if (voxelType != _Rgb && voxelType != _Rgba)
+	pvlFileManager.setVoxelType(0); // uchar
+      else
+	pvlFileManager.setVoxelType(voxelType);
       pvlFileManager.setHeaderSize(0);
       pvlFileManager.setBlockSize(blocksize);
       pvlFileManager.createFile(true);
@@ -1588,7 +1578,7 @@ Raw2Pvl::savePvl(VolInterface* volInterface,
 		  else
 		    volInterface->getDepthSlice(rvdepth-1, val[2*spread]);
 		}
-	      else
+	      else // spread == 0
 		volInterface->getDepthSlice(d, raw);
 	      
 	      if (spread > 0)
@@ -1717,8 +1707,11 @@ Raw2Pvl::savePvl(VolInterface* volInterface,
 	      float *ptr = (float*)raw;
 	      REMAPVOLUME();
 	    }
-	  
-	  pvlFileManager.setSlice(dd, pvl);
+
+	  if (voxelType == _Rgb || voxelType == _Rgba)
+	    pvlFileManager.setSlice(dd, raw);
+	  else
+	    pvlFileManager.setSlice(dd, pvl);
 	}
     }
 

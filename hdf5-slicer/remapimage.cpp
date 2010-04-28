@@ -364,7 +364,8 @@ RemapImage::setGradientStops(QGradientStops stops)
 {
   m_gradientStops = stops;
   generateColorTable();
-  m_image.setColorTable(m_colorMap);
+  if (m_image.format() == QImage::Format_Indexed8)
+    m_image.setColorTable(m_colorMap);
   resizeImage();
   update();
 }

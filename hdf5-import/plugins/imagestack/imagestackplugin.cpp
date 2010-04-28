@@ -130,8 +130,33 @@ ImageStackPlugin::setFile(QStringList files)
   m_height = img.width();
   m_width = img.height();
   m_headerBytes = 0;
+
+  //--------------
+  QStringList dtypes;
+  dtypes << "Grayscale Images"
+	 << "RGB Images"
+	 << "RGBA Images";
+  QString option = QInputDialog::getItem(0,
+					 "Select Image Type",
+					 "Image Type",
+					 dtypes,
+					 0,
+					 false);
   m_voxelType = _UChar;
   m_bytesPerVoxel = 1;
+
+  if (option == "RGB Images")
+    {
+      m_voxelType = _Rgb;
+      m_bytesPerVoxel = 3;
+    }
+  else if (option == "RGBA Images")
+    {
+      m_voxelType = _Rgba;
+      m_bytesPerVoxel = 4;
+    }
+  //--------------
+
 
   m_histogram.clear();
   for(int i=0; i<256; i++)
@@ -157,30 +182,52 @@ ImageStackPlugin::getDepthSlice(int slc,
     imgL = imgL.convertToFormat(QImage::Format_ARGB32);
 
   uchar *imgbits = imgL.bits();
-  for(uint j=0; j<m_width*m_height; j++)
-    slice[j] = imgbits[4*j];
+  if (m_voxelType == _UChar)
+    {
+      for(uint j=0; j<m_width*m_height; j++)
+	slice[j] = imgbits[4*j];
+    }
+  else if (m_voxelType == _Rgb)
+    {
+      for(uint j=0; j<m_width*m_height; j++)
+	{
+	  slice[3*j+0] = imgbits[4*j+2];
+	  slice[3*j+1] = imgbits[4*j+1];
+	  slice[3*j+2] = imgbits[4*j+0];
+	}
+    }
+  else if (m_voxelType == _Rgba)
+    {
+      for(uint j=0; j<m_width*m_height; j++)
+	{
+	  slice[4*j+0] = imgbits[4*j+2];
+	  slice[4*j+1] = imgbits[4*j+1];
+	  slice[4*j+2] = imgbits[4*j+0];
+	  slice[4*j+3] = imgbits[4*j+3];
+	}
+    }
+
 }
 
 QImage
 ImageStackPlugin::getDepthSliceImage(int slc)
 {
+  QImage imgL = QImage(m_imageList[slc]);
+  if (imgL.format() != QImage::Format_ARGB32)
+    imgL = imgL.convertToFormat(QImage::Format_ARGB32);
+
+  if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+    {
+      QImage img = imgL;
+      return img;
+    }
+
   if (m_image)
     delete [] m_image;
   m_image = new uchar[m_width*m_height];
 
   int nbytes = m_width*m_height*m_bytesPerVoxel;
   uchar *tmp = new uchar[nbytes];
-
-  QImage imgL = QImage(m_imageList[slc]);
-  if (imgL.format() != QImage::Format_ARGB32)
-    imgL = imgL.convertToFormat(QImage::Format_ARGB32);
-
-//  if (Global::rgbVolume())
-//    {
-//      delete [] tmp;
-//      QImage img = imgL;
-//      return img;
-//    }
 
   uchar *imgbits = imgL.bits();
   for(uint j=0; j<m_width*m_height; j++)
@@ -233,16 +280,16 @@ ImageStackPlugin::getWidthSliceImage(int slc)
   if (m_image)
     delete [] m_image;
 
-//  if (Global::rgbVolume())
-//    m_image = new uchar[4*m_depth*m_height];
-//  else
+  if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+    m_image = new uchar[4*m_depth*m_height];
+  else
     m_image = new uchar[m_depth*m_height];
 
 
   int nbytes;
-//  if (Global::rgbVolume())
-//    nbytes = m_depth*m_height*4;
-//  else
+  if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+    nbytes = m_depth*m_height*4;
+  else
     nbytes = m_depth*m_height*m_bytesPerVoxel;
 
   uchar *tmp = new uchar[nbytes];
@@ -254,34 +301,34 @@ ImageStackPlugin::getWidthSliceImage(int slc)
 	imgL = imgL.convertToFormat(QImage::Format_ARGB32);
 
       uchar *imgbits = imgL.bits();
-//      if (Global::rgbVolume())
-//	{
-//	  for(uint j=0; j<m_height; j++)
-//	    {
-//	      tmp[4*(i*m_height+j)+0] = imgbits[4*(slc*m_height+j)+0];
-//	      tmp[4*(i*m_height+j)+1] = imgbits[4*(slc*m_height+j)+1];
-//	      tmp[4*(i*m_height+j)+2] = imgbits[4*(slc*m_height+j)+2];
-//	      tmp[4*(i*m_height+j)+3] = imgbits[4*(slc*m_height+j)+3];
-//	    }
-//	}
-//      else
+      if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+	{
+	  for(uint j=0; j<m_height; j++)
+	    {
+	      tmp[4*(i*m_height+j)+0] = imgbits[4*(slc*m_height+j)+0];
+	      tmp[4*(i*m_height+j)+1] = imgbits[4*(slc*m_height+j)+1];
+	      tmp[4*(i*m_height+j)+2] = imgbits[4*(slc*m_height+j)+2];
+	      tmp[4*(i*m_height+j)+3] = imgbits[4*(slc*m_height+j)+3];
+	    }
+	}
+      else
 	{
 	  for(uint j=0; j<m_height; j++)
 	    tmp[i*m_height+j] = imgbits[4*(slc*m_height+j)];
 	}
     }
 
-//  if (Global::rgbVolume())
-//    {  
-//      memcpy(m_image, tmp, 4*m_depth*m_height);
-//      QImage img = QImage(m_image,
-//			  m_height, m_depth,
-//			  QImage::Format_ARGB32);
-//
-//      delete [] tmp;
-//
-//      return img;
-//    }
+  if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+    {  
+      memcpy(m_image, tmp, 4*m_depth*m_height);
+      QImage img = QImage(m_image,
+			  m_height, m_depth,
+			  QImage::Format_ARGB32);
+
+      delete [] tmp;
+
+      return img;
+    }
 
   int rawSize = m_rawMap.size()-1;
   for(uint i=0; i<m_depth*m_height; i++)
@@ -330,15 +377,15 @@ ImageStackPlugin::getHeightSliceImage(int slc)
   if (m_image)
     delete [] m_image;
 
-//  if (Global::rgbVolume())
-//    m_image = new uchar[4*m_depth*m_width];
-//  else
+  if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+    m_image = new uchar[4*m_depth*m_width];
+  else
     m_image = new uchar[m_depth*m_width];
 
   int nbytes;
-//  if (Global::rgbVolume())
-//    nbytes = m_depth*m_width*4;
-//  else
+  if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+    nbytes = m_depth*m_width*4;
+  else
     nbytes = m_depth*m_width*m_bytesPerVoxel;
 
   uchar *tmp = new uchar[nbytes];
@@ -351,34 +398,34 @@ ImageStackPlugin::getHeightSliceImage(int slc)
 	imgL = imgL.convertToFormat(QImage::Format_ARGB32);
 
       uchar *imgbits = imgL.bits();
-//      if (Global::rgbVolume())
-//	{
-//	  for(uint j=0; j<m_width; j++)
-//	    {
-//	      tmp[4*(i*m_width+j)+0] = imgbits[4*(j*m_height+slc)+0];
-//	      tmp[4*(i*m_width+j)+1] = imgbits[4*(j*m_height+slc)+1];
-//	      tmp[4*(i*m_width+j)+2] = imgbits[4*(j*m_height+slc)+2];
-//	      tmp[4*(i*m_width+j)+3] = imgbits[4*(j*m_height+slc)+3];
-//	    }
-//	}
-//      else
+      if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+	{
+	  for(uint j=0; j<m_width; j++)
+	    {
+	      tmp[4*(i*m_width+j)+0] = imgbits[4*(j*m_height+slc)+0];
+	      tmp[4*(i*m_width+j)+1] = imgbits[4*(j*m_height+slc)+1];
+	      tmp[4*(i*m_width+j)+2] = imgbits[4*(j*m_height+slc)+2];
+	      tmp[4*(i*m_width+j)+3] = imgbits[4*(j*m_height+slc)+3];
+	    }
+	}
+      else
 	{
 	  for(uint j=0; j<m_width; j++)
 	    tmp[i*m_width+j] = imgbits[4*(j*m_height+slc)];
 	}
     }
 
-//  if (Global::rgbVolume())
-//    {  
-//      memcpy(m_image, tmp, 4*m_depth*m_width);
-//      QImage img = QImage(m_image,
-//			  m_width, m_depth,
-//			  QImage::Format_ARGB32);
-//
-//      delete [] tmp;
-//
-//      return img;
-//    }
+  if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+    {  
+      memcpy(m_image, tmp, 4*m_depth*m_width);
+      QImage img = QImage(m_image,
+			  m_width, m_depth,
+			  QImage::Format_ARGB32);
+
+      delete [] tmp;
+
+      return img;
+    }
 
   int rawSize = m_rawMap.size()-1;
   for(uint i=0; i<m_depth*m_width; i++)
@@ -441,18 +488,18 @@ ImageStackPlugin::rawValue(int d, int w, int h)
 
   uchar *imgbits = imgL.bits();
 
-//  if (Global::rgbVolume())
-//    {
-//      uchar r = imgbits[4*(w*m_height+h)+0];
-//      uchar g = imgbits[4*(w*m_height+h)+1];
-//      uchar b = imgbits[4*(w*m_height+h)+2];
-//      uchar a = imgbits[4*(w*m_height+h)+3];
-//      
-//      pair.first = QVariant(QString(" (%1 %2 %3 %4)").\
-//			    arg(r).arg(g).arg(b).arg(a));
-//      pair.second = QVariant("rgba");
-//      return pair;
-//    }
+  if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+    {
+      uchar r = imgbits[4*(w*m_height+h)+0];
+      uchar g = imgbits[4*(w*m_height+h)+1];
+      uchar b = imgbits[4*(w*m_height+h)+2];
+      uchar a = imgbits[4*(w*m_height+h)+3];
+      
+      pair.first = QVariant(QString(" (%1 %2 %3 %4)").\
+			    arg(r).arg(g).arg(b).arg(a));
+      pair.second = QVariant("rgba");
+      return pair;
+    }
 
   uint val = imgbits[4*(w*m_height+h)];
   int rawSize = m_rawMap.size()-1;

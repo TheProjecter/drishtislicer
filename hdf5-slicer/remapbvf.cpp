@@ -168,6 +168,10 @@ RemapBvf::setFile(QString fl)
 	    m_voxelType = _Int;
 	  else if (pvalue == "float")
 	    m_voxelType = _Float;
+	  else if (pvalue == "rgb")
+	    m_voxelType = _Rgb;
+	  else if (pvalue == "rgba")
+	    m_voxelType = _Rgba;
 	}
       else if (dlist.at(i).nodeName() == "voxelsize")
 	{
@@ -207,9 +211,9 @@ RemapBvf::setFile(QString fl)
 
   m_headerBytes = m_skipBytes = 0;
 
-  // -- override if we are dealing with mapped file - .bvf
-  if (m_fileName.right(6) != "rawbvf")
-    m_voxelType = _UChar;
+//  // -- override if we are dealing with mapped file - .bvf
+//  if (m_fileName.right(6) != "rawbvf")
+//    m_voxelType = _UChar;
 
   m_bytesPerVoxel = 1;
   if (m_voxelType == _UChar) m_bytesPerVoxel = 1;
@@ -218,6 +222,8 @@ RemapBvf::setFile(QString fl)
   else if (m_voxelType == _Short) m_bytesPerVoxel = 2;
   else if (m_voxelType == _Int) m_bytesPerVoxel = 4;
   else if (m_voxelType == _Float) m_bytesPerVoxel = 4;
+  else if (m_voxelType == _Rgb) m_bytesPerVoxel = 3;
+  else if (m_voxelType == _Rgba) m_bytesPerVoxel = 4;
 
   m_currentSlice = m_currentAxis = -1;
 
@@ -269,9 +275,18 @@ RemapBvf::setFile(QString fl)
   m_pvlMap.append(255);
 
 
-  m_depthSliceData = new uchar[m_height*m_width];
-  m_widthSliceData = new uchar[m_depth*m_height];
-  m_heightSliceData = new uchar[m_depth*m_width];
+  if (m_voxelType != _Rgb && m_voxelType != _Rgba)
+    {
+      m_depthSliceData = new uchar[m_height*m_width];
+      m_widthSliceData = new uchar[m_depth*m_height];
+      m_heightSliceData = new uchar[m_depth*m_width];
+    }
+  else
+    {
+      m_depthSliceData = new uchar[4*m_height*m_width];
+      m_widthSliceData = new uchar[4*m_depth*m_height];
+      m_heightSliceData = new uchar[4*m_depth*m_width];
+    }
 
   return true;
 }
@@ -283,7 +298,9 @@ RemapBvf::initializeHistogram()
   float rMin;
   m_histogram.clear();
   if (m_voxelType == _UChar ||
-      m_voxelType == _Char)
+      m_voxelType == _Char ||
+      m_voxelType == _Rgb ||
+      m_voxelType == _Rgba)
     {
       if (m_voxelType == _UChar) m_rawMin = 0;
       if (m_voxelType == _Char) m_rawMin = -127;
@@ -334,6 +351,14 @@ RemapBvf::depthSlice(int slc, int level, bool partlyRead,
       m_currentSlice != slc)
     return;
 
+  if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+    {
+      depthSliceRgb(slc, level, partlyRead,
+		    wlimits, hlimits);
+      return;
+    }
+
+
   int wmin = wlimits.first;
   int wmax = wlimits.second;
   int hmin = hlimits.first;
@@ -350,12 +375,12 @@ RemapBvf::depthSlice(int slc, int level, bool partlyRead,
       emit setHiresImage(img, 100, 100, 5);
     }
 
-  int nbytes = nY*nZ*m_bytesPerVoxel;
-  uchar *tmp = new uchar[nbytes];
-
   if (m_image)
     delete [] m_image;
   m_image = new uchar[nY*nZ];
+
+  int nbytes = nY*nZ*m_bytesPerVoxel;
+  uchar *tmp = new uchar[nbytes];
 
   memcpy(tmp, m_bfReader.depthSlice(), nbytes);
 
@@ -363,62 +388,157 @@ RemapBvf::depthSlice(int slc, int level, bool partlyRead,
   int rawSize = m_rawMap.size()-1;
   for(int w=wmin; w<=wmax; w++)
     for(int h=hmin; h<=hmax; h++)
-    {
-      int i = w*nZ + h;
-
-      float v;
-
-      if (m_voxelType == _UChar)
-	v = ((uchar *)tmp)[i];
-      else if (m_voxelType == _Char)
-	v = ((char *)tmp)[i];
-      else if (m_voxelType == _UShort)
-	v = ((ushort *)tmp)[i];
-      else if (m_voxelType == _Short)
-	v = ((short *)tmp)[i];
-      else if (m_voxelType == _Int)
-	v = ((int *)tmp)[i];
-      else if (m_voxelType == _Float)
-	v = ((float *)tmp)[i];
-
-      float rv = qBound(0.0f, (v-m_rawMin)/(m_rawMax-m_rawMin), 1.0f);
-
-      uchar pv = 255*rv;
-      m_image[i] = pv;
-
-      int idx = nbins*rv;
-      m_histogram[idx] ++;
-    }
+      {
+	int i = w*nZ + h;
+	
+	float v;
+	
+	if (m_voxelType == _UChar)
+	  v = ((uchar *)tmp)[i];
+	else if (m_voxelType == _Char)
+	  v = ((char *)tmp)[i];
+	else if (m_voxelType == _UShort)
+	  v = ((ushort *)tmp)[i];
+	else if (m_voxelType == _Short)
+	  v = ((short *)tmp)[i];
+	else if (m_voxelType == _Int)
+	  v = ((int *)tmp)[i];
+	else if (m_voxelType == _Float)
+	  v = ((float *)tmp)[i];
+	
+	float rv = qBound(0.0f, (v-m_rawMin)/(m_rawMax-m_rawMin), 1.0f);
+	
+	uchar pv = 255*rv;
+	m_image[i] = pv;
+	
+	int idx = nbins*rv;
+	m_histogram[idx] ++;
+      }
   QImage img = QImage(m_image, nZ, nY, nZ, QImage::Format_Indexed8);
-
-  {
-    QImage timg = img.scaled(m_height, m_width,
-			     Qt::IgnoreAspectRatio,
-			     Qt::SmoothTransformation);
-    const uchar *tbits = timg.bits();
-    int w0 = wmin*p2;
-    int w1 = qMin(m_width-1, wmax*p2);
-    int h0 = hmin*p2;
-    int h1 = qMin(m_height-1, hmax*p2);
-    int comp = 4;
-    if(timg.depth() == 8) comp = 1;
-    int boff = (timg.bytesPerLine()/comp) - m_height;
-
-    for(int w=w0; w<=w1; w++)
-      for(int h=h0; h<=h1; h++)
-	{
-	  int ib = w*m_height + h;
-	  int ib1 = w*(m_height+boff) + h;
-	  *(m_depthSliceData+ib) = *(tbits + comp*ib1);
-	}      
-
-    img = QImage(m_depthSliceData, m_height, m_width, m_height, QImage::Format_Indexed8);
-  }
- 
+  
+  QImage timg = img.scaled(m_height, m_width,
+			   Qt::IgnoreAspectRatio,
+			   Qt::SmoothTransformation);
+  const uchar *tbits = timg.bits();
+  int w0 = wmin*p2;
+  int w1 = qMin(m_width-1, wmax*p2);
+  int h0 = hmin*p2;
+  int h1 = qMin(m_height-1, hmax*p2);
+  int comp = 4;
+  if(timg.depth() == 8) comp = 1;
+  int boff = (timg.bytesPerLine()/comp) - m_height;
+  
+  for(int w=w0; w<=w1; w++)
+    for(int h=h0; h<=h1; h++)
+      {
+	int ib = w*m_height + h;
+	int ib1 = w*(m_height+boff) + h;
+	*(m_depthSliceData+ib) = *(tbits + comp*ib1);
+      }      
+  
+  img = QImage(m_depthSliceData, m_height, m_width, m_height, QImage::Format_Indexed8);
+  
   delete [] tmp;
 
   emit setHiresImage(img, m_height, m_width, level);
   emit updateHistogram(m_histogram);
+
+  if (level > m_maxLevel && !partlyRead)
+    {
+      for(int i=0; i<m_histogram.count(); i++)
+	m_histogram[i] = 0;
+
+      emit getDepthSlice(level-1, slc,
+			 m_wstart, m_wend, m_hstart, m_hend);
+    }
+}
+
+void
+RemapBvf::depthSliceRgb(int slc, int level, bool partlyRead,
+			QPair<int, int> wlimits, QPair<int, int> hlimits)
+{
+  int wmin = wlimits.first;
+  int wmax = wlimits.second;
+  int hmin = hlimits.first;
+  int hmax = hlimits.second;
+
+  int p2 = qPow(2, level);
+  int nX = m_depth;
+  int nY = m_width/p2;
+  int nZ = m_height/p2;
+
+  if (slc < 0 || slc >= nX)
+    {
+      QImage img = QImage(100, 100, QImage::Format_Indexed8);
+      emit setHiresImage(img, 100, 100, 5);
+    }
+
+  if (m_image)
+    delete [] m_image;
+  m_image = new uchar[4*nY*nZ];
+
+
+  int nbytes = nY*nZ*m_bytesPerVoxel;
+  uchar *tmp = new uchar[nbytes];
+
+  memcpy(tmp, m_bfReader.depthSlice(), nbytes);
+
+  if (m_voxelType == _Rgb)
+    {
+      for(int w=wmin; w<=wmax; w++)
+	for(int h=hmin; h<=hmax; h++)
+	  {
+	    int i = w*nZ + h;
+	    m_image[4*i+0] = tmp[3*i+2];
+	    m_image[4*i+1] = tmp[3*i+1];
+	    m_image[4*i+2] = tmp[3*i+0];
+	    m_image[4*i+3] = 255;
+	  }
+    }
+  else
+    {
+      for(int w=wmin; w<=wmax; w++)
+	for(int h=hmin; h<=hmax; h++)
+	  {
+	    int i = w*nZ + h;
+	    m_image[4*i+0] = tmp[4*i+2];
+	    m_image[4*i+1] = tmp[4*i+1];
+	    m_image[4*i+2] = tmp[4*i+0];
+	    m_image[4*i+3] = tmp[4*i+3];
+	  }
+    }
+  
+  
+  QImage img = QImage(m_image, nZ, nY, QImage::Format_ARGB32);
+
+  QImage timg = img.scaled(m_height, m_width,
+			   Qt::IgnoreAspectRatio,
+			   Qt::SmoothTransformation);
+  const uchar *tbits = timg.bits();
+  int w0 = wmin*p2;
+  int w1 = qMin(m_width-1, wmax*p2);
+  int h0 = hmin*p2;
+  int h1 = qMin(m_height-1, hmax*p2);
+  int comp = 4;
+  if(timg.depth() == 8) comp = 1;
+  int boff = (timg.bytesPerLine()/comp) - m_height;
+  
+  for(int w=w0; w<=w1; w++)
+    for(int h=h0; h<=h1; h++)
+      {
+	int ib = w*m_height + h;
+	int ib1 = w*(m_height+boff) + h;
+	*(m_depthSliceData+4*ib+0) = *(tbits + 4*ib1+0);
+	*(m_depthSliceData+4*ib+1) = *(tbits + 4*ib1+1);
+	*(m_depthSliceData+4*ib+2) = *(tbits + 4*ib1+2);
+	*(m_depthSliceData+4*ib+3) = *(tbits + 4*ib1+3);
+      }
+  
+  img = QImage(m_depthSliceData, m_height, m_width, QImage::Format_ARGB32);
+  
+  delete [] tmp;
+
+  emit setHiresImage(img, m_height, m_width, level);
 
   if (level > m_maxLevel && !partlyRead)
     {
@@ -437,6 +557,13 @@ RemapBvf::widthSlice(int slc, int level, bool partlyRead,
   if (m_currentAxis != 1 ||
       m_currentSlice != slc)
     return;
+  
+  if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+    {
+      widthSliceRgb(slc, level, partlyRead,
+		    dlimits, hlimits);
+      return;
+    }
 
   int dmin = dlimits.first;
   int dmax = dlimits.second;
@@ -467,57 +594,55 @@ RemapBvf::widthSlice(int slc, int level, bool partlyRead,
   int rawSize = m_rawMap.size()-1;
   for(int d=dmin; d<=dmax; d++)
     for(int h=hmin; h<=hmax; h++)
-    {
-      int i = d*nZ + h;
-
-      float v;
-
-      if (m_voxelType == _UChar)
-	v = ((uchar *)tmp)[i];
-      else if (m_voxelType == _Char)
-	v = ((char *)tmp)[i];
-      else if (m_voxelType == _UShort)
-	v = ((ushort *)tmp)[i];
-      else if (m_voxelType == _Short)
-	v = ((short *)tmp)[i];
-      else if (m_voxelType == _Int)
-	v = ((int *)tmp)[i];
-      else if (m_voxelType == _Float)
-	v = ((float *)tmp)[i];
-
-      float rv = qBound(0.0f, (v-m_rawMin)/(m_rawMax-m_rawMin), 1.0f);
-
-      uchar pv = 255*rv;
-      m_image[i] = pv;
-
-      int idx = nbins*rv;
-      m_histogram[idx] ++;
-    }
+      {
+	int i = d*nZ + h;
+	
+	float v;
+	
+	if (m_voxelType == _UChar)
+	  v = ((uchar *)tmp)[i];
+	else if (m_voxelType == _Char)
+	  v = ((char *)tmp)[i];
+	else if (m_voxelType == _UShort)
+	  v = ((ushort *)tmp)[i];
+	else if (m_voxelType == _Short)
+	  v = ((short *)tmp)[i];
+	else if (m_voxelType == _Int)
+	  v = ((int *)tmp)[i];
+	else if (m_voxelType == _Float)
+	  v = ((float *)tmp)[i];
+	
+	float rv = qBound(0.0f, (v-m_rawMin)/(m_rawMax-m_rawMin), 1.0f);
+	
+	uchar pv = 255*rv;
+	m_image[i] = pv;
+	
+	int idx = nbins*rv;
+	m_histogram[idx] ++;
+      }
   QImage img = QImage(m_image, nZ, nX, nZ, QImage::Format_Indexed8);
-
-  {
-    QImage timg = img.scaled(m_height, m_depth,
-			     Qt::IgnoreAspectRatio,
-			     Qt::SmoothTransformation);
-    const uchar *tbits = timg.bits();
-    int d0 = dmin*p2;
-    int d1 = qMin(m_depth-1, dmax*p2);
-    int h0 = hmin*p2;
-    int h1 = qMin(m_height-1, hmax*p2);
-    int comp = 4;
-    if(timg.depth() == 8) comp = 1;
-    int boff = (timg.bytesPerLine()/comp) - m_height;
-
-    for(int d=d0; d<=d1; d++)
-      for(int h=h0; h<=h1; h++)
-	{
-	  int ib = d*m_height + h;
-	  int ib1 = d*(m_height+boff) + h;
-	  *(m_widthSliceData+ib) = *(tbits + comp*ib1);
-	}
-
-    img = QImage(m_widthSliceData, m_height, m_depth, m_height, QImage::Format_Indexed8);
-  }  
+  
+  QImage timg = img.scaled(m_height, m_depth,
+			   Qt::IgnoreAspectRatio,
+			   Qt::SmoothTransformation);
+  const uchar *tbits = timg.bits();
+  int d0 = dmin*p2;
+  int d1 = qMin(m_depth-1, dmax*p2);
+  int h0 = hmin*p2;
+  int h1 = qMin(m_height-1, hmax*p2);
+  int comp = 4;
+  if(timg.depth() == 8) comp = 1;
+  int boff = (timg.bytesPerLine()/comp) - m_height;
+  
+  for(int d=d0; d<=d1; d++)
+    for(int h=h0; h<=h1; h++)
+      {
+	int ib = d*m_height + h;
+	int ib1 = d*(m_height+boff) + h;
+	*(m_widthSliceData+ib) = *(tbits + comp*ib1);
+      }
+  
+  img = QImage(m_widthSliceData, m_height, m_depth, m_height, QImage::Format_Indexed8);
 
   delete [] tmp;
 
@@ -535,12 +660,114 @@ RemapBvf::widthSlice(int slc, int level, bool partlyRead,
 }
 
 void
+RemapBvf::widthSliceRgb(int slc, int level, bool partlyRead,
+			QPair<int, int> dlimits, QPair<int, int> hlimits)
+{
+  int dmin = dlimits.first;
+  int dmax = dlimits.second;
+  int hmin = hlimits.first;
+  int hmax = hlimits.second;
+
+  int p2 = qPow(2, level);
+  int nX = m_depth/p2;
+  int nY = m_width;
+  int nZ = m_height/p2;
+
+  if (slc < 0 || slc >= nY)
+    {
+      QImage img = QImage(100, 100, QImage::Format_Indexed8);
+      emit setHiresImage(img, 100, 100, 5);
+    }
+
+  if (m_image)
+    delete [] m_image;
+  m_image = new uchar[4*nX*nZ];
+
+  int nbytes = nX*nZ*m_bytesPerVoxel;
+  uchar *tmp = new uchar[nbytes];
+
+  memcpy(tmp, m_bfReader.widthSlice(), nbytes);
+
+  if (m_voxelType == _Rgb)
+    {
+      for(int d=dmin; d<=dmax; d++)
+	for(int h=hmin; h<=hmax; h++)
+	  {
+	    int i = d*nZ + h;
+	    m_image[4*i+0] = tmp[3*i+2];
+	    m_image[4*i+1] = tmp[3*i+1];
+	    m_image[4*i+2] = tmp[3*i+0];
+	    m_image[4*i+3] = 255;
+	  }
+    }
+  else
+    {
+      for(int d=dmin; d<=dmax; d++)
+	for(int h=hmin; h<=hmax; h++)
+	  {
+	    int i = d*nZ + h;
+	    m_image[4*i+0] = tmp[4*i+2];
+	    m_image[4*i+1] = tmp[4*i+1];
+	    m_image[4*i+2] = tmp[4*i+0];
+	    m_image[4*i+3] = tmp[4*i+3];
+	  }
+    }
+  
+  QImage img = QImage(m_image, nZ, nX, QImage::Format_ARGB32);
+  
+  QImage timg = img.scaled(m_height, m_depth,
+			   Qt::IgnoreAspectRatio,
+			   Qt::SmoothTransformation);
+  const uchar *tbits = timg.bits();
+  int d0 = dmin*p2;
+  int d1 = qMin(m_depth-1, dmax*p2);
+  int h0 = hmin*p2;
+  int h1 = qMin(m_height-1, hmax*p2);
+  int comp = 4;
+  if(timg.depth() == 8) comp = 1;
+  int boff = (timg.bytesPerLine()/comp) - m_height;
+  
+  for(int d=d0; d<=d1; d++)
+    for(int h=h0; h<=h1; h++)
+      {
+	int ib = d*m_height + h;
+	int ib1 = d*(m_height+boff) + h;
+	*(m_widthSliceData+4*ib+0) = *(tbits + 4*ib1+0);
+	*(m_widthSliceData+4*ib+1) = *(tbits + 4*ib1+1);
+	*(m_widthSliceData+4*ib+2) = *(tbits + 4*ib1+2);
+	*(m_widthSliceData+4*ib+3) = *(tbits + 4*ib1+3);
+      }
+  
+  img = QImage(m_widthSliceData, m_height, m_depth, QImage::Format_ARGB32);
+  
+  delete [] tmp;
+  
+  emit setHiresImage(img, m_height, m_depth, level);
+
+  if (level > m_maxLevel && !partlyRead)
+    {
+      for(int i=0; i<m_histogram.count(); i++)
+	m_histogram[i] = 0;
+      
+      emit getWidthSlice(level-1, slc,
+			 m_dstart, m_dend, m_hstart, m_hend);
+    }
+}
+
+void
 RemapBvf::heightSlice(int slc, int level, bool partlyRead,
 		      QPair<int, int> dlimits, QPair<int, int> wlimits)
 {
   if (m_currentAxis != 2 ||
       m_currentSlice != slc)
     return;
+
+  if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+    {
+      heightSliceRgb(slc, level, partlyRead,
+		     dlimits, wlimits);
+      return;
+    }
 
   int dmin = dlimits.first;
   int dmax = dlimits.second;
@@ -600,29 +827,27 @@ RemapBvf::heightSlice(int slc, int level, bool partlyRead,
     }
   QImage img = QImage(m_image, nY, nX, nY, QImage::Format_Indexed8);
 
-  {
-    QImage timg = img.scaled(m_width, m_depth,
-			     Qt::IgnoreAspectRatio,
-			     Qt::SmoothTransformation);
-    const uchar *tbits = timg.bits();
-    int d0 = dmin*p2;
-    int d1 = qMin(m_depth-1, dmax*p2);
-    int w0 = wmin*p2;
-    int w1 = qMin(m_width-1, wmax*p2);
-    int comp = 4;
-    if(timg.depth() == 8) comp = 1;
-    int boff = (timg.bytesPerLine()/comp) - m_width;
-
-    for(int d=d0; d<=d1; d++)
-      for(int w=w0; w<=w1; w++)
-	{
-	  int ib = d*m_width + w;
-	  int ib1 = d*(m_width+boff) + w;
-	  *(m_heightSliceData+ib) = *(tbits + comp*ib1);
-	}
-
-    img = QImage(m_heightSliceData, m_width, m_depth, m_width, QImage::Format_Indexed8);
-  }
+  QImage timg = img.scaled(m_width, m_depth,
+			   Qt::IgnoreAspectRatio,
+			   Qt::SmoothTransformation);
+  const uchar *tbits = timg.bits();
+  int d0 = dmin*p2;
+  int d1 = qMin(m_depth-1, dmax*p2);
+  int w0 = wmin*p2;
+  int w1 = qMin(m_width-1, wmax*p2);
+  int comp = 4;
+  if(timg.depth() == 8) comp = 1;
+  int boff = (timg.bytesPerLine()/comp) - m_width;
+  
+  for(int d=d0; d<=d1; d++)
+    for(int w=w0; w<=w1; w++)
+      {
+	int ib = d*m_width + w;
+	int ib1 = d*(m_width+boff) + w;
+	*(m_heightSliceData+ib) = *(tbits + comp*ib1);
+      }
+  
+  img = QImage(m_heightSliceData, m_width, m_depth, m_width, QImage::Format_Indexed8);
 
   delete [] tmp;
 
@@ -638,6 +863,103 @@ RemapBvf::heightSlice(int slc, int level, bool partlyRead,
 			  m_dstart, m_dend, m_wstart, m_wend);
     }
 }
+
+void
+RemapBvf::heightSliceRgb(int slc, int level, bool partlyRead,
+			 QPair<int, int> dlimits, QPair<int, int> wlimits)
+{
+  int dmin = dlimits.first;
+  int dmax = dlimits.second;
+  int wmin = wlimits.first;
+  int wmax = wlimits.second;
+
+  int p2 = qPow(2, level);
+  int nX = m_depth/p2;
+  int nY = m_width/p2;
+  int nZ = m_height;
+
+  if (slc < 0 || slc >= nZ)
+    {
+      QImage img = QImage(100, 100, QImage::Format_Indexed8);
+      emit setHiresImage(img, 100, 100, 5);
+    }
+
+  if (m_image)
+    delete [] m_image;
+  m_image = new uchar[4*nX*nY];
+
+  int nbytes = nX*nY*m_bytesPerVoxel;
+  uchar *tmp = new uchar[nbytes];
+
+  memcpy(tmp, m_bfReader.heightSlice(), nbytes);
+
+  if (m_voxelType == _Rgb)
+    {
+      for(int d=dmin; d<=dmax; d++)
+	for(int w=wmin; w<=wmax; w++)
+	  {
+	    int i = d*nY + w;
+	    m_image[4*i+0] = tmp[3*i+2];
+	    m_image[4*i+1] = tmp[3*i+1];
+	    m_image[4*i+2] = tmp[3*i+0];
+	    m_image[4*i+3] = 255;
+	  }
+    }
+  else
+    {
+      for(int d=dmin; d<=dmax; d++)
+	for(int w=wmin; w<=wmax; w++)
+	  {
+	    int i = d*nY + w;
+	    m_image[4*i+0] = tmp[4*i+2];
+	    m_image[4*i+1] = tmp[4*i+1];
+	    m_image[4*i+2] = tmp[4*i+0];
+	    m_image[4*i+3] = tmp[4*i+3];
+	  }
+    }
+
+  QImage img = QImage(m_image, nY, nX, QImage::Format_ARGB32);
+
+  QImage timg = img.scaled(m_width, m_depth,
+			   Qt::IgnoreAspectRatio,
+			   Qt::SmoothTransformation);
+  const uchar *tbits = timg.bits();
+  int d0 = dmin*p2;
+  int d1 = qMin(m_depth-1, dmax*p2);
+  int w0 = wmin*p2;
+  int w1 = qMin(m_width-1, wmax*p2);
+  int comp = 4;
+  if(timg.depth() == 8) comp = 1;
+  int boff = (timg.bytesPerLine()/comp) - m_width;
+  
+  for(int d=d0; d<=d1; d++)
+    for(int w=w0; w<=w1; w++)
+      {
+	int ib = d*m_width + w;
+	int ib1 = d*(m_width+boff) + w;
+	*(m_heightSliceData+4*ib+0) = *(tbits + 4*ib1+0);
+	*(m_heightSliceData+4*ib+1) = *(tbits + 4*ib1+1);
+	*(m_heightSliceData+4*ib+2) = *(tbits + 4*ib1+2);
+	*(m_heightSliceData+4*ib+3) = *(tbits + 4*ib1+3);
+      }
+  
+  img = QImage(m_heightSliceData, m_width, m_depth, QImage::Format_ARGB32);
+
+  delete [] tmp;
+
+  emit setHiresImage(img, m_width, m_depth, level);
+
+  if (level > m_maxLevel && !partlyRead)
+    {
+      for(int i=0; i<m_histogram.count(); i++)
+	m_histogram[i] = 0;
+
+      emit getHeightSlice(level-1, slc,
+			  m_dstart, m_dend, m_wstart, m_wend);
+    }
+}
+
+
 
 void RemapBvf::lowresGridSize(int &sslevel,
 			      int &ssd, int &ssw, int &ssh)
@@ -809,32 +1131,36 @@ RemapBvf::startHeightSliceImage(int slc,
 QImage
 RemapBvf::getDepthSliceLowresImage(int slc)
 {
+  m_currentAxis = 0;
+  m_currentSlice = slc;
+
+  if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+    return getDepthSliceLowresImageRgb(slc);
+
+
   // update histogram image
   for(int i=0; i<m_histogram.count(); i++)
     m_histogram[i] = 0;
 
   
-  m_currentAxis = 0;
-  m_currentSlice = slc;
-
   int nY, nZ;
   uchar *lowresSlice = m_bfReader.getLowresDepthSlice(slc, nY, nZ);
   
   int nbytes = nY*nZ*m_bytesPerVoxel;
-  uchar *tmp = new uchar[nbytes];
-
   if (m_image)
     delete [] m_image;
   m_image = new uchar[nY*nZ];
 
+  uchar *tmp = new uchar[nbytes];
+  
   memcpy(tmp, lowresSlice, nbytes);
-
+  
   int nbins = m_histogram.size()-1;
   int rawSize = m_rawMap.size()-1;
   for(int i=0; i<nY*nZ; i++)
     {
       float v;
-
+      
       if (m_voxelType == _UChar)
 	v = ((uchar *)tmp)[i];
       else if (m_voxelType == _Char)
@@ -847,36 +1173,36 @@ RemapBvf::getDepthSliceLowresImage(int slc)
 	v = ((int *)tmp)[i];
       else if (m_voxelType == _Float)
 	v = ((float *)tmp)[i];
-
+      
       float rv = qBound(0.0f, (v-m_rawMin)/(m_rawMax-m_rawMin), 1.0f);
-
+      
       uchar pv = 255*rv;
       m_image[i] = pv;
-
+      
       int idx = nbins*rv;
       m_histogram[idx] ++;
     }
-
+  
   delete [] tmp;
-
+  
   QImage img = QImage(m_image, nZ, nY, nZ, QImage::Format_Indexed8);
 
   QImage timg = img.scaled(m_height, m_width, 
 			   Qt::IgnoreAspectRatio,
 			   Qt::SmoothTransformation);
   const uchar *tbits = timg.bits();
-    int comp = 4;
-    if(timg.depth() == 8) comp = 1;
-    int boff = (timg.bytesPerLine()/comp) - m_height;
-
-    for(int w=0; w<m_width; w++)
-      for(int h=0; h<m_height; h++)
-	{
-	  int ib = w*m_height + h;
-	  int ib1 = w*(m_height+boff) + h;
-	  *(m_depthSliceData+ib) = *(tbits + comp*ib1);
-	}      
-
+  int comp = 4;
+  if(timg.depth() == 8) comp = 1;
+  int boff = (timg.bytesPerLine()/comp) - m_height;
+  
+  for(int w=0; w<m_width; w++)
+    for(int h=0; h<m_height; h++)
+      {
+	int ib = w*m_height + h;
+	int ib1 = w*(m_height+boff) + h;
+	*(m_depthSliceData+ib) = *(tbits + comp*ib1);
+      }      
+  
   emit updateHistogram(m_histogram);
   for(int i=0; i<m_histogram.count(); i++)
     m_histogram[i] = 0;
@@ -885,15 +1211,67 @@ RemapBvf::getDepthSliceLowresImage(int slc)
 }
 
 QImage
+RemapBvf::getDepthSliceLowresImageRgb(int slc)
+{
+  int nY, nZ;
+  uchar *lowresSlice = m_bfReader.getLowresDepthSlice(slc, nY, nZ);
+  
+  int nbytes = nY*nZ*m_bytesPerVoxel;
+  if (m_image)
+    delete [] m_image;
+  m_image = new uchar[4*nY*nZ];
+
+  if (m_voxelType == _Rgb)
+    {
+      for(int i=0; i<nY*nZ; i++)
+	{
+	  m_image[4*i+0] = lowresSlice[3*i+2];
+	  m_image[4*i+1] = lowresSlice[3*i+1];
+	  m_image[4*i+2] = lowresSlice[3*i+0];
+	  m_image[4*i+3] = 255;
+	}
+    }
+  else
+    memcpy(m_image, lowresSlice, 4*nY*nZ);
+  
+  QImage img = QImage(m_image, nZ, nY, QImage::Format_ARGB32);
+  
+  QImage timg = img.scaled(m_height, m_width, 
+			   Qt::IgnoreAspectRatio,
+			   Qt::SmoothTransformation);
+  const uchar *tbits = timg.bits();
+  int comp = 4;
+  if(timg.depth() == 8) comp = 1;
+  int boff = (timg.bytesPerLine()/comp) - m_height;
+  
+  for(int w=0; w<m_width; w++)
+    for(int h=0; h<m_height; h++)
+      {
+	int ib = w*m_height + h;
+	int ib1 = w*(m_height+boff) + h;
+	*(m_depthSliceData+4*ib+0) = *(tbits + 4*ib1+0);
+	*(m_depthSliceData+4*ib+1) = *(tbits + 4*ib1+1);
+	*(m_depthSliceData+4*ib+2) = *(tbits + 4*ib1+2);
+	*(m_depthSliceData+4*ib+3) = *(tbits + 4*ib1+3);
+      }    
+
+  return img;
+}
+
+
+QImage
 RemapBvf::getWidthSliceLowresImage(int slc)
 {
+  m_currentAxis = 1;
+  m_currentSlice = slc;
+
+  if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+    return getWidthSliceLowresImageRgb(slc);
+
   // update histogram image
   for(int i=0; i<m_histogram.count(); i++)
     m_histogram[i] = 0;
 
-
-  m_currentAxis = 1;
-  m_currentSlice = slc;
 
   int nX, nY, nZ;
   uchar *lowresSlice = m_bfReader.getLowresWidthSlice(slc, nX, nZ);
@@ -962,19 +1340,69 @@ RemapBvf::getWidthSliceLowresImage(int slc)
 }
 
 QImage
+RemapBvf::getWidthSliceLowresImageRgb(int slc)
+{
+  int nX, nY, nZ;
+  uchar *lowresSlice = m_bfReader.getLowresWidthSlice(slc, nX, nZ);
+
+  if (m_image)
+    delete [] m_image;
+  m_image = new uchar[4*nX*nZ];
+
+  if (m_voxelType == _Rgb)
+    {
+      for(int i=0; i<nX*nZ; i++)
+	{
+	  m_image[4*i+0] = lowresSlice[3*i+2];
+	  m_image[4*i+1] = lowresSlice[3*i+1];
+	  m_image[4*i+2] = lowresSlice[3*i+0];
+	  m_image[4*i+3] = 255;
+	}
+    }
+  else
+    memcpy(m_image, lowresSlice, 4*nX*nZ);
+  
+  QImage img = QImage(m_image, nZ, nX, QImage::Format_ARGB32);
+
+  QImage timg = img.scaled(m_height, m_depth, 
+			   Qt::IgnoreAspectRatio,
+			   Qt::SmoothTransformation);
+  const uchar *tbits = timg.bits();
+  int comp = 4;
+  if(timg.depth() == 8) comp = 1;
+  int boff = (timg.bytesPerLine()/comp) - m_height;
+
+  for(int d=0; d<m_depth; d++)
+    for(int h=0; h<m_height; h++)
+      {
+	int ib = d*m_height + h;
+	int ib1 = d*(m_height+boff) + h;
+	*(m_widthSliceData+4*ib+0) = *(tbits + 4*ib1+0);
+	*(m_widthSliceData+4*ib+1) = *(tbits + 4*ib1+1);
+	*(m_widthSliceData+4*ib+2) = *(tbits + 4*ib1+2);
+	*(m_widthSliceData+4*ib+3) = *(tbits + 4*ib1+3);
+      }
+
+  return img;
+}
+
+
+QImage
 RemapBvf::getHeightSliceLowresImage(int slc)
 {
+  m_currentAxis = 2;
+  m_currentSlice = slc;
+
+  if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+    return getHeightSliceLowresImageRgb(slc);
+
   // update histogram image
   for(int i=0; i<m_histogram.count(); i++)
     m_histogram[i] = 0;
 
 
-  m_currentAxis = 2;
-  m_currentSlice = slc;
-
   int nX, nY, nZ;
   uchar *lowresSlice = m_bfReader.getLowresHeightSlice(slc, nX, nY);
-
 
   if (m_image)
     delete [] m_image;
@@ -1032,14 +1460,60 @@ RemapBvf::getHeightSliceLowresImage(int slc)
 	*(m_heightSliceData+ib) = *(tbits + comp*ib1);
       }
 
-  img = QImage(m_heightSliceData, m_width, m_depth, m_width, QImage::Format_Indexed8);
-
   emit updateHistogram(m_histogram);
   for(int i=0; i<m_histogram.count(); i++)
     m_histogram[i] = 0;
 
   return img;
 }
+
+QImage
+RemapBvf::getHeightSliceLowresImageRgb(int slc)
+{
+  int nX, nY, nZ;
+  uchar *lowresSlice = m_bfReader.getLowresHeightSlice(slc, nX, nY);
+
+  if (m_image)
+    delete [] m_image;
+  m_image = new uchar[4*nX*nY];
+
+  if (m_voxelType == _Rgb)
+    {
+      for(int i=0; i<nX*nY; i++)
+	{
+	  m_image[4*i+0] = lowresSlice[3*i+2];
+	  m_image[4*i+1] = lowresSlice[3*i+1];
+	  m_image[4*i+2] = lowresSlice[3*i+0];
+	  m_image[4*i+3] = 255;
+	}
+    }
+  else
+    memcpy(m_image, lowresSlice, 4*nX*nY);
+
+  QImage img = QImage(m_image, nY, nX, QImage::Format_ARGB32);
+
+  QImage timg = img.scaled(m_width, m_depth, 
+			   Qt::IgnoreAspectRatio,
+			   Qt::SmoothTransformation);
+  const uchar *tbits = timg.bits();
+  int comp = 4;
+  if(timg.depth() == 8) comp = 1;
+
+  int boff = (timg.bytesPerLine()/comp) - m_width;
+  for(int d=0; d<m_depth; d++)
+    for(int w=0; w<m_width; w++)
+      {
+	int ib = d*m_width + w;
+	int ib1 = d*(m_width+boff) + w;
+	*(m_heightSliceData+4*ib+0) = *(tbits + 4*ib1+0);
+	*(m_heightSliceData+4*ib+1) = *(tbits + 4*ib1+1);
+	*(m_heightSliceData+4*ib+2) = *(tbits + 4*ib1+2);
+	*(m_heightSliceData+4*ib+3) = *(tbits + 4*ib1+3);
+      }
+
+  return img;
+}
+
 
 QPair<QVariant, QVariant>
 RemapBvf::rawValue(int d, int w, int h)

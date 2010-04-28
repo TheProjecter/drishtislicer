@@ -44,7 +44,19 @@ BlockFileReader::getLowresDepthSlice(int d, int& ssw, int& ssh)
     else if (m_voxelType == _Int)
       LOWRESDEPTHSLICE(int)		    
     else if (m_voxelType == _Float)
-      LOWRESDEPTHSLICE(float)		    
+      LOWRESDEPTHSLICE(float)
+    else if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+      {
+	int nRgb = 3;
+	if (m_voxelType == _Rgba)
+	  nRgb = 4;
+	idx0 *= nRgb;
+	idx1 *= nRgb;
+
+	for (int iss=0; iss<nRgb*m_ssw*m_ssh; iss++)   
+	  m_lowresSlice[iss] = (1.0-frc)*m_ssvol[idx0+iss] +
+	                             frc*m_ssvol[idx1+iss]; 
+      }
 
   return m_lowresSlice;
 }
@@ -209,6 +221,14 @@ BlockFileReader::depthSliceDone()
   float frc = (ds-localSlice*p2)*1.0/p2;
   int idx0 = localSlice*bb*bb;
   int idx1 = (localSlice+1)*bb*bb;
+  if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+    {
+      int nRgb = 3;
+      if (m_voxelType == _Rgba)
+	nRgb = 4;
+      idx0 *= nRgb;
+      idx1 *= nRgb;
+    }
   if (p2 == 1)
     {
       idx1 = idx0;
@@ -263,6 +283,15 @@ BlockFileReader::depthSliceDone()
 		      DEPTHSLICE_1(int)		    
 		    else if (m_voxelType == _Float)
 		      DEPTHSLICE_1(float)		    
+		    else if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+		      {
+			int nRgb = 3;
+			if (m_voxelType == _Rgba)
+			  nRgb = 4;
+			for (int iss=0; iss<nRgb*bb*bb; iss++)   
+			  interpData[iss] = (1.0-frc)*blockData[idx0+iss] +
+			                          frc*blockData[idx1+iss]; 
+		      }
 		  }
 		else
 		  {
@@ -280,6 +309,15 @@ BlockFileReader::depthSliceDone()
 		      DEPTHSLICE_2(int)		    
 		    else if (m_voxelType == _Float)
 		      DEPTHSLICE_2(float)		    
+		    else if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+		      {
+			int nRgb = 3;
+			if (m_voxelType == _Rgba)
+			  nRgb = 4;
+			for (int iss=0; iss<nRgb*bb*bb; iss++)   
+			  interpData[iss] = (1.0-frc)*blockData[idx0+iss] +
+			                          frc*block1Data[idx1+iss]; 
+		      }
 		  }
 
 		for(int iw=0; iw<iwend; iw++)

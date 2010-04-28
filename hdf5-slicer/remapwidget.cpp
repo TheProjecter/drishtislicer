@@ -61,6 +61,14 @@ RemapWidget::showWidgets()
   ui.butZ->show();
   ui.butZ->setChecked(true);
 
+  if (m_remapVolume->voxelType() == _Rgb ||
+      m_remapVolume->voxelType() == _Rgba)
+    {
+      ui.checkBox->setCheckState(Qt::Unchecked);
+      ui.checkBox->hide();
+      m_histogramWidget->hide();
+      m_gradientWidget->hide();
+    }
 }
 
 bool
@@ -178,6 +186,7 @@ RemapWidget::setFile(QString flnm)
 
   connect(m_slider, SIGNAL(valueChanged(int)),
 	  m_imageWidget, SLOT(sliceChanged(int)));
+
   connect(m_slider, SIGNAL(valueChangedLowres(int)),
 	  m_imageWidget, SLOT(sliceChangedLowres(int)));
 
@@ -196,19 +205,6 @@ RemapWidget::setFile(QString flnm)
   ((RemapBvf*)m_remapVolume)->gridSize(m_depth, m_width, m_height);
   ((RemapBvf*)m_remapVolume)->lowresGridSize(m_sslevel, m_ssd, m_ssw, m_ssh);
 
-//  //---------------------------------------------------
-//  // ---- set initial raw min and max values
-//  float rawMin, rawMax;
-//  rawMin = m_remapVolume->rawMin();
-//  rawMax = m_remapVolume->rawMax();
-//  m_histogramWidget->setRawMinMax(rawMin, rawMax);
-//  if (ui.butZ->isChecked())
-//    m_imageWidget->setSliceType(RemapImage::DSlice);
-//  else if (ui.butY->isChecked())
-//    m_imageWidget->setSliceType(RemapImage::WSlice);
-//  else if (ui.butX->isChecked())
-//    m_imageWidget->setSliceType(RemapImage::HSlice);
-//  //---------------------------------------------------
   on_butZ_clicked();
 
   showWidgets();

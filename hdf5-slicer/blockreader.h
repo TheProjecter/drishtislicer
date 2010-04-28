@@ -52,6 +52,7 @@ class BlockReader : public QThread
   //H5File *m_hdf5file[10];
   H5File *m_hdf5file;
   DataSet m_hdf5dataset[10];
+  IntType m_dataType;  
 
   QString m_baseFilename;
   QWaitCondition m_condition;

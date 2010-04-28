@@ -49,6 +49,22 @@ BlockFileReader::getLowresHeightSlice(int h, int& ssd, int& ssw)
       LOWRESHEIGHTSLICE(int)		    
     else if (m_voxelType == _Float)
       LOWRESHEIGHTSLICE(float)		    
+    else if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+      {
+	int nRgb = 3;
+	if (m_voxelType == _Rgba)
+	  nRgb = 4;
+
+	int iss = 0;
+	for(int i=0; i<m_ssd; i++)
+	  for(int j=0; j<m_ssw; j++)
+	    {
+	      for(int a=0; a<nRgb; a++)
+		m_lowresSlice[nRgb*iss+a] = (1.0-frc)*m_ssvol[nRgb*(i*m_ssw*m_ssh + j*m_ssh + idx0)+a] +
+		                                  frc*m_ssvol[nRgb*(i*m_ssw*m_ssh + j*m_ssh + idx1)+a];
+	      iss++;
+	    }
+      }
 
   return m_lowresSlice;
 }
@@ -279,15 +295,18 @@ BlockFileReader::heightSliceDone()
 		  HEIGHTSLICE_1(int)		    
 		else if (m_voxelType == _Float)
 		  HEIGHTSLICE_1(float)		    
+		else if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+		  {
+		    int nRgb = 3;
+		    if (m_voxelType == _Rgba)
+		      nRgb = 4;
 
-//		for(int id=0; id<idend; id++)
-//		  for(int iw=0; iw<iwend; iw++)
-//		    {
-//		      m_heightSlice[(d*bb+id)*newwd +
-//				    (w*bb+iw)] = 
-//			block[id*bb*bb +
-//			      iw*bb + localSlice];
-//		    }
+		    for(int id=0; id<idend; id++)
+		      for(int iw=0; iw<iwend; iw++)
+			for(int a=0; a<nRgb; a++)
+			  m_heightSlice[nRgb*((d*bb+id)*newwd + (w*bb+iw))+a] =
+			                     blockData[nRgb*(id*bb*bb + iw*bb + idx0)+a];
+		  }
 	      }
 	    else
 	      {
@@ -305,17 +324,19 @@ BlockFileReader::heightSliceDone()
 		      HEIGHTSLICE_2(int)		    
 		    else if (m_voxelType == _Float)
 		      HEIGHTSLICE_2(float)		    
-
-//		    for(int id=0; id<idend; id++)
-//		      for(int iw=0; iw<iwend; iw++)
-//			{
-//			  m_heightSlice[(d*bb+id)*newwd +
-//					(w*bb+iw)] = 
-//			    (1.0-frc)*block[id*bb*bb +
-//					    iw*bb + idx0] +
-//			          frc*block[id*bb*bb +
-//					    iw*bb + idx1];
-//			}
+		    else if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+		      {
+			int nRgb = 3;
+			if (m_voxelType == _Rgba)
+			  nRgb = 4;
+			
+			for(int id=0; id<idend; id++)
+			  for(int iw=0; iw<iwend; iw++)
+			    for(int a=0; a<nRgb; a++)
+			      m_heightSlice[nRgb*((d*bb+id)*newwd + (w*bb+iw))+a] =
+				(1.0-frc)*blockData[nRgb*(id*bb*bb + iw*bb + idx0)+a] +
+			              frc*blockData[nRgb*(id*bb*bb + iw*bb + idx1)+a];
+		      }
 		  }
 		else
 		  {
@@ -333,17 +354,20 @@ BlockFileReader::heightSliceDone()
 		      HEIGHTSLICE_3(int)		    
 		    else if (m_voxelType == _Float)
 		      HEIGHTSLICE_3(float)		    
+		    else if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+		      {
+			int nRgb = 3;
+			if (m_voxelType == _Rgba)
+			  nRgb = 4;
 
-//		    for(int id=0; id<idend; id++)
-//		      for(int iw=0; iw<iwend; iw++)
-//			{
-//			  m_heightSlice[(d*bb+id)*newwd +
-//					(w*bb+iw)] = 
-//			    (1.0-frc)*block[id*bb*bb +
-//					    iw*bb + idx0] +
-//			          frc*block1[id*bb*bb +
-//					     iw*bb + idx1];
-//			}
+			for(int id=0; id<idend; id++)
+			  for(int iw=0; iw<iwend; iw++)
+			    for(int a=0; a<nRgb; a++)
+			      m_heightSlice[nRgb*((d*bb+id)*newwd + (w*bb+iw))+a] =
+				(1.0-frc)*blockData[nRgb*(id*bb*bb + iw*bb + idx0)+a] +
+				      frc*block1Data[nRgb*(id*bb*bb + iw*bb + idx1)+a];
+		      }
+
 		  }
 	      }
 	  }

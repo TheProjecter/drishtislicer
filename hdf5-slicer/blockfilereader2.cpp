@@ -50,6 +50,21 @@ BlockFileReader::getLowresWidthSlice(int w, int& ssd, int& ssh)
       LOWRESWIDTHSLICE(int)		    
     else if (m_voxelType == _Float)
       LOWRESWIDTHSLICE(float)		    
+    else if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+      {
+	int nRgb = 3;
+	if (m_voxelType == _Rgba)
+	  nRgb = 4;
+	int iss = 0;
+	for(int i=0; i<m_ssd; i++)
+	  for(int j=0; j<m_ssh; j++)
+	    {
+	      for(int a=0; a<nRgb; a++)
+		m_lowresSlice[nRgb*iss+a] = (1.0-frc)*m_ssvol[nRgb*(i*m_ssw*m_ssh + idx0 + j)+a] +
+		                                  frc*m_ssvol[nRgb*(i*m_ssw*m_ssh + idx1 + j)+a];
+	      iss++;
+	    }
+      }
 
   return m_lowresSlice;
 }
@@ -273,12 +288,18 @@ BlockFileReader::widthSliceDone()
 		      WIDTHSLICE_1(int)		    
 		    else if (m_voxelType == _Float)
 		      WIDTHSLICE_1(float)		    
-
-//		    for(int id=0; id<idend; id++)
-//		      for(int ih=0; ih<ihend; ih++)
-//			m_widthSlice[(d*bb +id)*newht + h*bb + ih] =
-//			  (1.0-frc)*block[id*bb*bb + idx0 + ih] +
-//			        frc*block[id*bb*bb + idx1 + ih];
+		    else if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+		      {
+			int nRgb = 3;
+			if (m_voxelType == _Rgba)
+			  nRgb = 4;
+			for(int id=0; id<idend; id++)
+			  for(int ih=0; ih<ihend; ih++)
+			    for(int a=0; a<nRgb; a++)
+			      m_widthSlice[nRgb*((d*bb +id)*newht + h*bb + ih)+a] =
+				               (1.0-frc)*blockData[nRgb*(id*bb*bb + idx0 + ih)+a] +
+				                     frc*blockData[nRgb*(id*bb*bb + idx1 + ih)+a];
+		      }
 		  }
 		else
 		  {
@@ -287,7 +308,7 @@ BlockFileReader::widthSliceDone()
 		    if (m_voxelType == _UChar)
 		      WIDTHSLICE_2(uchar)
 		    else if (m_voxelType == _Char)
-		      WIDTHSLICE_2(char)		    
+		      WIDTHSLICE_2(char) 
 		    else if (m_voxelType == _UShort)
 		      WIDTHSLICE_2(ushort)		    
 		    else if (m_voxelType == _Short)
@@ -296,12 +317,19 @@ BlockFileReader::widthSliceDone()
 		      WIDTHSLICE_2(int)		    
 		    else if (m_voxelType == _Float)
 		      WIDTHSLICE_2(float)		    
+		    else if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+		      {
+			int nRgb = 3;
+			if (m_voxelType == _Rgba)
+			  nRgb = 4;
+			for(int id=0; id<idend; id++)
+			  for(int ih=0; ih<ihend; ih++)
+			    for(int a=0; a<nRgb; a++)
+			      m_widthSlice[nRgb*((d*bb +id)*newht + h*bb + ih)+a] =
+				               (1.0-frc)*blockData[nRgb*(id*bb*bb + idx0 + ih)+a] +
+				                     frc*block1Data[nRgb*(id*bb*bb + idx1 + ih)+a];
+		      }
 
-//		    for(int id=0; id<idend; id++)
-//		      for(int ih=0; ih<ihend; ih++)
-//			m_widthSlice[(d*bb +id)*newht + h*bb + ih] =
-//			  (1.0-frc)*block[id*bb*bb + idx0 + ih] +
-//			        frc*block1[id*bb*bb + idx1 + ih];
 		  }
 	      }
 	  }

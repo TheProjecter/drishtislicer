@@ -85,6 +85,17 @@ class RemapBvf : public AbstractRemapVolume
   int m_hstart, m_hend;
 
   void initializeHistogram();
+
+  void depthSliceRgb(int, int, bool,
+		     QPair<int, int>, QPair<int, int>);
+  void widthSliceRgb(int, int, bool,
+		     QPair<int, int>, QPair<int, int>);
+  void heightSliceRgb(int, int, bool,
+		      QPair<int, int>, QPair<int, int>);
+
+  QImage getDepthSliceLowresImageRgb(int);
+  QImage getWidthSliceLowresImageRgb(int);
+  QImage getHeightSliceLowresImageRgb(int);
 };
 
 #endif

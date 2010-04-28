@@ -76,9 +76,10 @@ RemapWidget::showWidgets()
 bool
 RemapWidget::loadPlugin()
 {
+  QString plugindir = qApp->applicationDirPath() + QDir::separator() + "plugin";
   QString pluginflnm = QFileDialog::getOpenFileName(0,
 						    "Load Plugin",
-						    qApp->applicationDirPath(),
+						    plugindir,
 						    "dll files (*.dll)");
   QPluginLoader pluginLoader(pluginflnm);
   QObject *plugin = pluginLoader.instance();
@@ -216,7 +217,9 @@ RemapWidget::setFile(QList<QString> flnm,
   
   showWidgets();
 
-  if (m_volInterface->voxelType() == _UChar)
+  if (m_volInterface->voxelType() == _UChar ||
+      m_volInterface->voxelType() == _Rgb ||
+      m_volInterface->voxelType() == _Rgba)
     {
       ui.checkBox->setCheckState(Qt::Unchecked);
       ui.checkBox->hide();

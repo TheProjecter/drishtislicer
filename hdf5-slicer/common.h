@@ -8,7 +8,9 @@ enum VoxelType
     _UShort,
     _Short,
     _Int,
-    _Float
+    _Float,
+    _Rgb,
+    _Rgba
   };
 
 #endif // COMMON_H
