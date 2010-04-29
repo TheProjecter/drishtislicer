@@ -102,8 +102,13 @@ BlockFileWriter::createFile(bool writeHeader)
   vsize *= m_width;
   vsize *= m_height;
 
+
+  int maxvsize = 128*1024*1024;
+  if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+    maxvsize = 64*1024*1024;
+
   m_sslevel = 1;
-  while (vsize > 128*1024*1024)
+  while (vsize > maxvsize)
     {
       m_sslevel *= 2;
       vsize /= 8;
@@ -259,38 +264,6 @@ BlockFileWriter::saveDict()
 		 m_dataType,
 		 memspace,
 		 dataspace );
-      
-//  if (m_voxelType == _UChar) 
-//    m_lowres.write(m_ssvol,
-//		   PredType::NATIVE_UCHAR,
-//		   memspace,
-//		   dataspace );
-//  else if (m_voxelType == _Char) 
-//    m_lowres.write(m_ssvol,
-//		   PredType::NATIVE_CHAR,
-//		   memspace,
-//		   dataspace );
-//  else if (m_voxelType == _UShort)  
-//    m_lowres.write(m_ssvol,
-//		   PredType::NATIVE_USHORT,
-//		   memspace,
-//		   dataspace );
-//    else if (m_voxelType == _Short) 
-//    m_lowres.write(m_ssvol,
-//		   PredType::NATIVE_SHORT,
-//		   memspace,
-//		   dataspace );
-//    else if (m_voxelType == _Int)
-//    m_lowres.write(m_ssvol,
-//		   PredType::NATIVE_INT,
-//		   memspace,
-//		   dataspace );
-//  else if (m_voxelType == _Float)
-//    m_lowres.write(m_ssvol,
-//		   PredType::NATIVE_FLOAT,
-//		   memspace,
-//		   dataspace );
-
   
   Attribute attrib = m_lowres.createAttribute("sslevel",
 					      PredType::NATIVE_UCHAR,
@@ -454,8 +427,8 @@ BlockFileWriter::genSliceBlocks(int level)
 {
   int bb0 = m_blockSize/qPow(2, level-1);
   int bb1 = m_blockSize/qPow(2, level);
-  int bpb0 = bb0*bb0*bb0;
-  int bpb1 = bb1*bb1*bb1;
+  int bpb0 = bb0*bb0*bb0*m_bytesPerVoxel;
+  int bpb1 = bb1*bb1*bb1*m_bytesPerVoxel;
 
   int lbno = 0;
   for(int w=0; w<m_wblocks; w++)
@@ -556,31 +529,6 @@ BlockFileWriter::dumpSliceBlocks(int ib, int d)
 	m_hdf5dataset[ib].write(m_slice + lbno*bpb,
 				m_dataType,
 				memspace, dspace );
-
-//       if (m_voxelType == _UChar) 
-//	 m_hdf5dataset[ib].write(m_slice + lbno*bpb,
-//				 PredType::NATIVE_UCHAR,
-//				 memspace, dspace );
-//       else if (m_voxelType == _Char)  
-//	 m_hdf5dataset[ib].write(m_slice + lbno*bpb,
-//				 PredType::NATIVE_CHAR,
-//				 memspace, dspace );
-//       else if (m_voxelType == _UShort)
-//	 m_hdf5dataset[ib].write(m_slice + lbno*bpb,
-//				 PredType::NATIVE_USHORT,
-//				 memspace, dspace );
-//       else if (m_voxelType == _Short) 
-//	 m_hdf5dataset[ib].write(m_slice + lbno*bpb,
-//				 PredType::NATIVE_SHORT,
-//				 memspace, dspace );
-//       else if (m_voxelType == _Int)   
-//	 m_hdf5dataset[ib].write(m_slice + lbno*bpb,
-//				 PredType::NATIVE_INT,
-//				 memspace, dspace );
-//       else if (m_voxelType == _Float) 
-//	 m_hdf5dataset[ib].write(m_slice + lbno*bpb,
-//				 PredType::NATIVE_FLOAT,
-//				 memspace, dspace );
 
 	lbno ++;
       }

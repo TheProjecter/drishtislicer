@@ -55,22 +55,30 @@ RemapWidget::hideWidgets()
 void
 RemapWidget::showWidgets()
 {
-  if (!Global::rgbVolume())
+  m_histogramWidget->show();
+  m_gradientWidget->show();
+
+  if (m_volInterface->voxelType() == _UChar ||
+      m_volInterface->voxelType() == _Rgb ||
+      m_volInterface->voxelType() == _Rgba)
     {
-      ui.checkBox->show();
-      ui.checkBox->setCheckState(Qt::Checked);
+      ui.checkBox->hide();
+      ui.checkBox->setCheckState(Qt::Unchecked);
+      m_gradientWidget->hide();
+      m_histogramWidget->hide();
     }
   else
     {
-      ui.checkBox->setCheckState(Qt::Unchecked);
-      m_gradientWidget->hide();
+      ui.checkBox->show();
+      ui.checkBox->setCheckState(Qt::Checked);
+      m_histogramWidget->show();
+      m_gradientWidget->show();
     }
 
   ui.butX->show();
   ui.butY->show();
   ui.butZ->show();
   ui.butZ->setChecked(true);
-
 }
 
 bool
@@ -216,15 +224,6 @@ RemapWidget::setFile(QList<QString> flnm,
   setRawMinMax();
   
   showWidgets();
-
-  if (m_volInterface->voxelType() == _UChar ||
-      m_volInterface->voxelType() == _Rgb ||
-      m_volInterface->voxelType() == _Rgba)
-    {
-      ui.checkBox->setCheckState(Qt::Unchecked);
-      ui.checkBox->hide();
-      m_histogramWidget->hide();
-    }
 
   return true;
 }

@@ -61,13 +61,15 @@ RemapWidget::showWidgets()
   ui.butZ->show();
   ui.butZ->setChecked(true);
 
+  ui.histogramFrame->show();
+  ui.colorFrame->show();
   if (m_remapVolume->voxelType() == _Rgb ||
       m_remapVolume->voxelType() == _Rgba)
     {
       ui.checkBox->setCheckState(Qt::Unchecked);
       ui.checkBox->hide();
-      m_histogramWidget->hide();
-      m_gradientWidget->hide();
+      ui.histogramFrame->hide();
+      ui.colorFrame->hide();
     }
 }
 

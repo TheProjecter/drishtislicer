@@ -373,6 +373,7 @@ RemapBvf::depthSlice(int slc, int level, bool partlyRead,
     {
       QImage img = QImage(100, 100, QImage::Format_Indexed8);
       emit setHiresImage(img, 100, 100, 5);
+      return;
     }
 
   if (m_image)
@@ -471,6 +472,7 @@ RemapBvf::depthSliceRgb(int slc, int level, bool partlyRead,
     {
       QImage img = QImage(100, 100, QImage::Format_Indexed8);
       emit setHiresImage(img, 100, 100, 5);
+      return;
     }
 
   if (m_image)

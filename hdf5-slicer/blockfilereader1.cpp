@@ -264,8 +264,8 @@ BlockFileReader::depthSliceDone()
 	      {
 		for(int iw=0; iw<iwend; iw++)
 		  memcpy(m_depthSlice + ((w*bb +iw)*newht + h*bb)*m_bytesPerVoxel,
-			 blockData + (localSlice*bb*bb + iw*bb)*m_bytesPerVoxel,
-			 ihend*m_bytesPerVoxel);
+			   blockData + (localSlice*bb*bb + iw*bb)*m_bytesPerVoxel,
+			                                    ihend*m_bytesPerVoxel);
 	      }
 	    else
 	      {
