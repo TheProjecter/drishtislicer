@@ -19,19 +19,8 @@ class DrishtiImport : public QMainWindow
   void closeEvent(QCloseEvent *event);
   
  private slots :
-  void on_actionHelp_triggered();
   void on_actionConvert_triggered();
   void on_actionTimeSeries_triggered();
-  void on_actionRAW_triggered();
-  void on_actionAnalyze_triggered();
-  void on_actionTOM_triggered();
-  void on_actionNetCDF_triggered();
-  void on_actionImage_directory_triggered();
-  void on_actionRGB_directory_triggered();
-  void on_actionDicom_directory_triggered();
-  void on_actionImageMagick_directory_triggered();
-  void on_actionHDF4_directory_triggered();
-  void on_actionRaw_slices_triggered();
 
   void on_actionSave_Images_triggered();
   void on_actionSave_As_triggered();
@@ -41,15 +30,28 @@ class DrishtiImport : public QMainWindow
   void on_saveLimits_triggered();
   void on_saveImage_triggered();
 
+  void loadDirectory();
+  void loadFiles();
+
  private :
   Ui::DrishtiImport ui;
 
+  QStringList m_pluginFileTypes;
+  QStringList m_pluginDirTypes;
+  QStringList m_pluginFileDLib;
+  QStringList m_pluginDirDLib;
+
   RemapWidget *m_remapWidget;
+
+  void registerPlugins();
 
   void loadSettings();
   void saveSettings();
 
   void Old2New(QStringList);
+
+  void loadDirectory(QString, int);
+  void loadFiles(QStringList, int);
 };
 
 #endif

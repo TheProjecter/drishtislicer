@@ -1357,8 +1357,7 @@ Raw2Pvl::savePvlHeader(QString pvlFilename,
 }
 
 void
-Raw2Pvl::savePvl(VolInterface* volInterface,
-		 int volumeType,
+Raw2Pvl::savePvl(VolumeData* volData,
 		 int dmin, int dmax,
 		 int wmin, int wmax,
 		 int hmin, int hmax,
@@ -1366,14 +1365,14 @@ Raw2Pvl::savePvl(VolInterface* volInterface,
 {
   //------------------------------------------------------
   int rvdepth, rvwidth, rvheight;    
-  volInterface->gridSize(rvdepth, rvwidth, rvheight);
+  volData->gridSize(rvdepth, rvwidth, rvheight);
 
   int dsz=dmax-dmin+1;
   int wsz=wmax-wmin+1;
   int hsz=hmax-hmin+1;
 
-  uchar voxelType = volInterface->voxelType();  
-  int headerBytes = volInterface->headerBytes();
+  uchar voxelType = volData->voxelType();  
+  int headerBytes = volData->headerBytes();
 
   int bpv = 1;
   if (voxelType == _UChar) bpv = 1;
@@ -1382,8 +1381,7 @@ Raw2Pvl::savePvl(VolInterface* volInterface,
   else if (voxelType == _Short) bpv = 2;
   else if (voxelType == _Int) bpv = 4;
   else if (voxelType == _Float) bpv = 4;
-  else if (voxelType == _Rgb) bpv = 3;
-  else if (voxelType == _Rgba) bpv = 4;
+  else if (voxelType == _Rgb || voxelType == _Rgba) bpv = 4;
 
   //------------------------------------------------------
 
@@ -1419,10 +1417,10 @@ Raw2Pvl::savePvl(VolInterface* volInterface,
   // -- get saving parameters for processed file
   SavePvlDialog savePvlDialog;
   float vx, vy, vz;
-  volInterface->voxelSize(vx, vy, vz);
-  savePvlDialog.setVoxelUnit(volInterface->voxelUnit());
+  volData->voxelSize(vx, vy, vz);
+  savePvlDialog.setVoxelUnit(volData->voxelUnit());
   savePvlDialog.setVoxelSize(vx, vy, vz);
-  savePvlDialog.setDescription(volInterface->description());
+  savePvlDialog.setDescription(volData->description());
   savePvlDialog.exec();
 
   int spread = savePvlDialog.volumeFilter();
@@ -1430,8 +1428,8 @@ Raw2Pvl::savePvl(VolInterface* volInterface,
   QString description = savePvlDialog.description();
   savePvlDialog.voxelSize(vx, vy, vz);
 
-  QList<float> rawMap = volInterface->rawMap();
-  QList<uchar> pvlMap = volInterface->pvlMap();
+  QList<float> rawMap = volData->rawMap();
+  QList<uchar> pvlMap = volData->pvlMap();
 
   int nbytes = rvwidth*rvheight*bpv;
   double *filtervol = new double[wsz2*hsz2];
@@ -1482,7 +1480,7 @@ Raw2Pvl::savePvl(VolInterface* volInterface,
 	  rawflnm = QFileInfo(ftpvl.absolutePath(),
 			      ftraw.completeBaseName() + ".raw").absoluteFilePath();
 
-	  volInterface->replaceFile(timeseriesFiles[tsf]);
+	  volData->replaceFile(timeseriesFiles[tsf]);
 	}
 
       int blocksize = getBlockSize();
@@ -1556,30 +1554,30 @@ Raw2Pvl::savePvl(VolInterface* volInterface,
 		{
 		  if (d == d0)
 		    {
-		      volInterface->getDepthSlice(d, val[spread]);
+		      volData->getDepthSlice(d, val[spread]);
 		      for(int i=-spread; i<0; i++)
 			{
 			  if (d+i >= 0)
-			    volInterface->getDepthSlice(d+i, val[spread+i]);
+			    volData->getDepthSlice(d+i, val[spread+i]);
 			  else
-			    volInterface->getDepthSlice(0, val[spread+i]);
+			    volData->getDepthSlice(0, val[spread+i]);
 			}
 		      
 		      for(int i=1; i<=spread; i++)
 			{
 			  if (d+i < rvdepth)
-			    volInterface->getDepthSlice(d+i, val[spread+i]);
+			    volData->getDepthSlice(d+i, val[spread+i]);
 			  else
-			    volInterface->getDepthSlice(rvdepth-1, val[spread+i]);
+			    volData->getDepthSlice(rvdepth-1, val[spread+i]);
 			}
 		    }
 		  else if (d < rvdepth-spread)
-		    volInterface->getDepthSlice(d+spread, val[2*spread]);
+		    volData->getDepthSlice(d+spread, val[2*spread]);
 		  else
-		    volInterface->getDepthSlice(rvdepth-1, val[2*spread]);
+		    volData->getDepthSlice(rvdepth-1, val[2*spread]);
 		}
 	      else // spread == 0
-		volInterface->getDepthSlice(d, raw);
+		volData->getDepthSlice(d, raw);
 	      
 	      if (spread > 0)
 		{
@@ -1708,10 +1706,23 @@ Raw2Pvl::savePvl(VolInterface* volInterface,
 	      REMAPVOLUME();
 	    }
 
-	  if (voxelType == _Rgb || voxelType == _Rgba)
-	    pvlFileManager.setSlice(dd, raw);
-	  else
+	  if (voxelType != _Rgb && voxelType != _Rgba)
 	    pvlFileManager.setSlice(dd, pvl);
+	  else
+	    {
+	      if (voxelType == _Rgb)
+		{ // remove the alpha part
+		  for(int fi=0; fi<wsz2*hsz2; fi++)
+		    {
+		      raw[3*fi+0] = raw[4*fi+0];
+		      raw[3*fi+1] = raw[4*fi+1];
+		      raw[3*fi+2] = raw[4*fi+2];
+		    }
+		  pvlFileManager.setSlice(dd, raw);
+		}
+	      else
+		pvlFileManager.setSlice(dd, raw);
+	    }
 	}
     }
 

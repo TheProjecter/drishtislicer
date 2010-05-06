@@ -103,8 +103,8 @@ HEADERS += global.h \
 	   myslider.h \
 	   raw2pvl.h \
 	   savepvldialog.h \
-	   volumefilemanager.h \
 	   blockfilewriter.h \
+	   volumedata.h \
 	   volinterface.h
 
 SOURCES += global.cpp \
@@ -123,6 +123,6 @@ SOURCES += global.cpp \
 	   myslider.cpp \
 	   raw2pvl.cpp \
 	   savepvldialog.cpp \
-	   volumefilemanager.cpp \
+	   volumedata.cpp \
 	   blockfilewriter.cpp
 

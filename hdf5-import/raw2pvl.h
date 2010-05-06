@@ -3,16 +3,7 @@
 
 #include <QtGui>
 
-#include "volinterface.h"
-
-//#include "remapanalyze.h"
-//#include "remapdicomvolume.h"
-//#include "remaphdf4.h"
-//#include "remapimagevolume.h"
-//#include "remapncvolume.h"
-//#include "remaprawslices.h"
-//#include "remaprawvolume.h"
-//#include "remaptomvolume.h"
+#include "volumedata.h"
 
 class Raw2Pvl
 {
@@ -46,8 +37,7 @@ class Raw2Pvl
 			      int, int, int,
 			      int, int);
 
-  static void savePvl(VolInterface*,
-		      int,
+  static void savePvl(VolumeData*,
 		      int, int,
 		      int, int,
 		      int, int,

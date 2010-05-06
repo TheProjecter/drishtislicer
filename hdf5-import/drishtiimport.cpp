@@ -9,8 +9,6 @@
 #include <QTextStream>
 #include <QDomDocument>
 
-#include <QLibrary>
-
 DrishtiImport::DrishtiImport(QWidget *parent) :
   QMainWindow(parent)
 {
@@ -27,7 +25,242 @@ DrishtiImport::DrishtiImport(QWidget *parent) :
 
   loadSettings();
 
+  registerPlugins();
+
   Global::setStatusBar(statusBar());
+}
+
+void
+DrishtiImport::registerPlugins()
+{
+  m_pluginFileTypes.clear();
+  m_pluginFileDLib.clear();
+  m_pluginDirTypes.clear();
+  m_pluginDirDLib.clear();
+
+  QString plugindir = qApp->applicationDirPath() + QDir::separator() + "plugin";
+
+  QDir dir(plugindir);
+  dir.setFilter(QDir::Files);
+  QStringList filters;
+  filters << "*.dll";
+  dir.setNameFilters(filters);
+  QFileInfoList list = dir.entryInfoList();
+
+  if (list.size() == 0)
+    {
+      QMessageBox::information(0, "Error", QString("No plugins found in %1").arg(plugindir));
+      close();
+    }
+
+  for (int i=0; i<list.size(); i++)
+    {
+      QString pluginflnm = list.at(i).absoluteFilePath();
+
+      QPluginLoader pluginLoader(pluginflnm);
+      QObject *plugin = pluginLoader.instance();
+      if (plugin)
+	{
+	  VolInterface *vi = qobject_cast<VolInterface *>(plugin);
+	  if (vi)
+	    {
+	      QStringList rs = vi->registerPlugin();
+
+	      int idx = rs.indexOf("file");
+	      if (idx == -1) idx = rs.indexOf("files");
+	      if (idx >= 0)
+		{
+		  if (rs.size() >= idx+1)
+		    {
+		      m_pluginFileTypes << rs[idx+1];
+		      m_pluginFileDLib << pluginflnm;
+		    }
+		  else
+		    QMessageBox::information(0, "Error",
+		      QString("Received illegal files register string [%1] for plugin [%2]").\
+					     arg(rs.join(" ")).arg(pluginflnm));
+
+		}
+
+	      idx = rs.indexOf("dir");
+	      if (idx == -1) idx = rs.indexOf("directory");
+	      if (idx >= 0)
+		{
+		  QPair<QString, QStringList> ft;
+		  if (rs.size() >= idx+1)
+		    {
+		      m_pluginDirTypes << rs[idx+1];
+		      m_pluginDirDLib << pluginflnm;
+		    }
+		  else
+		    QMessageBox::information(0, "Error",
+		    QString("Received illegal directory register string [%1] for plugin [%2]").\
+					     arg(rs.join(" ")).arg(pluginflnm));
+
+		}
+	    }
+	}
+    }
+
+  QMenu *loadDirMenu;
+  QMenu *loadFileMenu;
+
+  if (m_pluginDirTypes.size() > 0)
+    loadDirMenu = ui.menuLoad->addMenu("Directory");
+
+  if (m_pluginFileTypes.size() > 0)
+    loadFileMenu = ui.menuLoad->addMenu("Files");
+  
+  for (int i=0; i<m_pluginDirTypes.size(); i++)
+    {
+      QAction *action = new QAction(this);
+      action->setText(m_pluginDirTypes[i]);
+      action->setData(m_pluginDirTypes[i]);
+      action->setVisible(true);      
+      connect(action, SIGNAL(triggered()),
+	      this, SLOT(loadDirectory()));
+      loadDirMenu->addAction(action);
+    }
+
+  for (int i=0; i<m_pluginFileTypes.size(); i++)
+    {
+      QAction *action = new QAction(this);
+      action->setText(m_pluginFileTypes[i]);
+      action->setData(m_pluginFileTypes[i]);
+      action->setVisible(true);      
+      connect(action, SIGNAL(triggered()),
+	      this, SLOT(loadFiles()));
+      loadFileMenu->addAction(action);
+    }
+}
+
+void
+DrishtiImport::loadFiles()
+{
+  QAction *action = qobject_cast<QAction *>(sender());
+  QString plugin = action->data().toString();
+  int idx = m_pluginFileTypes.indexOf(plugin);
+
+  QStringList flnms;
+  flnms = QFileDialog::getOpenFileNames(0,
+					"Load Files",
+					Global::previousDirectory(),
+					QString("%1 (*)").arg(plugin));
+  
+  if (flnms.size() == 0)
+    return;
+
+  loadFiles(flnms, idx);
+}
+
+void
+DrishtiImport::loadFiles(QStringList flnms,
+			 int pluginidx)
+{
+  if (flnms.count() > 1)
+    {
+      FilesListDialog fld(flnms);
+      fld.exec();
+      if (fld.result() == QDialog::Rejected)
+	return;
+    }
+
+  QFileInfo f(flnms[0]);
+  Global::setPreviousDirectory(f.absolutePath());
+
+  int idx = pluginidx;
+
+  if (idx == -1)
+    {
+      QStringList ftypes;
+      for(int i=0; i<m_pluginFileTypes.size(); i++)
+	{
+	  ftypes << QString("%1 : %2").		\
+	    arg(i+1).arg(m_pluginFileTypes[i]);
+	}
+
+      QString option = QInputDialog::getItem(0,
+					     "Select File Type",
+					     "File Type",
+					     ftypes,
+					     0,
+					     false);
+  
+      idx = ftypes.indexOf(option);
+
+      if (idx == -1)
+	{
+	  QMessageBox::information(0, "Error",
+				   QString("No plugin found for %1").arg(option));
+	  return;
+	}
+    }
+
+  if (idx >= 0)
+    m_remapWidget->setFile(flnms, m_pluginFileDLib[idx]);
+}
+
+void
+DrishtiImport::loadDirectory()
+{
+  QAction *action = qobject_cast<QAction *>(sender());
+  QString plugin = action->data().toString();
+  int idx = m_pluginDirTypes.indexOf(plugin);
+
+  if (action)
+    {
+      QString dirname;
+      dirname = QFileDialog::getExistingDirectory(0,
+					       "Directory",
+					       Global::previousDirectory(),
+					       QFileDialog::ShowDirsOnly |
+					       QFileDialog::DontResolveSymlinks);
+  
+      if (dirname.size() == 0)
+	return;
+
+      loadDirectory(dirname, idx);
+    }
+}
+
+void
+DrishtiImport::loadDirectory(QString dirname, int pluginidx)
+{
+  QFileInfo f(dirname);
+  Global::setPreviousDirectory(f.absolutePath());
+
+  QStringList flnms;
+  flnms << dirname;
+
+  int idx = pluginidx;
+
+  if (idx == -1)
+    {
+      QStringList dtypes;
+      for(int i=0; i<m_pluginDirTypes.size(); i++)
+	{
+	  dtypes << QString("%1 : %2").		\
+	    arg(i+1).arg(m_pluginDirTypes[i]);
+	}
+
+      QString option = QInputDialog::getItem(0,
+					     "Select Directory Type",
+					     "Directory Type",
+					     dtypes,
+					     0,
+					     false);  
+      idx = dtypes.indexOf(option);
+      
+      if (idx == -1)
+	{
+	  QMessageBox::information(0, "Error",
+				   QString("No plugin found for %1").arg(option));
+	  return;
+	}
+    }
+
+  if (idx >= 0)
+    m_remapWidget->setFile(flnms, m_pluginDirDLib[idx]);
 }
 
 void
@@ -46,50 +279,6 @@ void
 DrishtiImport::on_saveImage_triggered()
 {
   m_remapWidget->saveImage();
-}
-
-void
-DrishtiImport::on_actionHelp_triggered()
-{
-  QString app;
-#if defined(Q_OS_LINUX)
-  app = 
-    QLibraryInfo::location(QLibraryInfo::BinariesPath) + 
-    QDir::separator() +
-    QLatin1String(DRISHTIIMPORT_ASSISTANT);
-#elif defined(Q_OS_WIN32)
-  app = QCoreApplication::applicationDirPath() + "/assistant";
-#elif defined(Q_OS_MAC)
-  QDir appd=QCoreApplication::applicationDirPath();
-  appd.cdUp();
-  appd.cdUp();
-  appd.cdUp();
-  appd.cd("Assistant.app");
-  appd.cd("Contents");
-  appd.cd("MacOS");
-  
-  app = appd.absoluteFilePath("Assistant");
-#else
-  #error Unsupported platform.
-#endif
-
-
-  QStringList args;
-  args << "-collectionFile";
-  args << QFileInfo(Global::documentationPath(),
-		   "drishtiimport.qhc").absoluteFilePath();
-  args << "-enableRemoteControl";
-
-
-  QProcess *process = new QProcess(this);
-  process->start(app, args);
-
-  if (!process->waitForStarted())
-    {
-      QMessageBox::critical(this,  "Remote Control",
-			    QString("Unable to launch Help."));
-      return;
-    }
 }
 
 void
@@ -187,251 +376,45 @@ DrishtiImport::Old2New(QStringList flnms)
 void
 DrishtiImport::on_actionConvert_triggered()
 {
-  QStringList flnms;
-  flnms = QFileDialog::getOpenFileNames(0,
-				       "Load Old-style NetCDF File/s",
-				       Global::previousDirectory(),
-				       "NetCDF Files (*.nc)");
-  
-  if (flnms.size() == 0)
-    return;
-
-  Old2New(flnms);
+//  QStringList flnms;
+//  flnms = QFileDialog::getOpenFileNames(0,
+//				       "Load Old-style NetCDF File/s",
+//				       Global::previousDirectory(),
+//				       "NetCDF Files (*.nc)");
+//  
+//  if (flnms.size() == 0)
+//    return;
+//
+//  Old2New(flnms);
 }
 
 void
 DrishtiImport::on_actionTimeSeries_triggered()
 {
-  m_remapWidget->handleTimeSeries();
-}
-
-void
-DrishtiImport::on_actionRAW_triggered()
-{
-  QStringList flnms;
-  flnms = QFileDialog::getOpenFileNames(0,
-				       "Load RAW File",
-				       Global::previousDirectory(),
-				       "RAW Files (*.raw *.raw.* *.*)");
-  
-  if (flnms.size() == 0)
-    return;
-
-  if (flnms.count() > 1)
+  QStringList ftypes;
+  for(int i=0; i<m_pluginFileTypes.size(); i++)
     {
-      FilesListDialog fld(flnms);
-      fld.exec();
-      if (fld.result() == QDialog::Rejected)
-	return;
+      ftypes << QString("%1 : %2").		\
+	arg(i+1).arg(m_pluginFileTypes[i]);
     }
 
-  QFileInfo f(flnms[0]);
-  Global::setPreviousDirectory(f.absolutePath());
-
-  if (flnms.count() == 1)
-    m_remapWidget->setFile(flnms, RemapWidget::RAWVolume);
-  else
-    m_remapWidget->setFile(flnms, RemapWidget::RawSlabs);
-}
-
-void
-DrishtiImport::on_actionAnalyze_triggered()
-{
-  QString flnm;
-  flnm = QFileDialog::getOpenFileName(0,
-				      "Load HDR File",
-				      Global::previousDirectory(),
-				      "HDR Files (*.hdr)");
+  QString option = QInputDialog::getItem(0,
+					 "Select File Type",
+					 "File Type",
+					 ftypes,
+					 0,
+					 false);
   
-  if (flnm.isEmpty())
-    return;
+  int idx = ftypes.indexOf(option);
 
-  QFileInfo f(flnm);
-  Global::setPreviousDirectory(f.absolutePath());
-
-  QStringList flnms;
-  flnms << flnm;
-  m_remapWidget->setFile(flnms, RemapWidget::AnalyzeVolume);
-}
-
-void
-DrishtiImport::on_actionTOM_triggered()
-{
-  QString flnm;
-  flnm = QFileDialog::getOpenFileName(0,
-				      "Load TOM File",
-				      Global::previousDirectory(),
-				      "TOM Files (*.tom)");
-  
-  if (flnm.isEmpty())
-    return;
-
-  QFileInfo f(flnm);
-  Global::setPreviousDirectory(f.absolutePath());
-
-  QStringList flnms;
-  flnms << flnm;
-  Global::setRGBVolume(false);
-  m_remapWidget->setFile(flnms, RemapWidget::TOMVolume);
-}
-
-void
-DrishtiImport::on_actionNetCDF_triggered()
-{
-  QStringList flnms;
-  flnms = QFileDialog::getOpenFileNames(0,
-					"Load NetCDF File/s",
-					Global::previousDirectory(),
-					"NetCDF Files (*.nc)");
-  
-  if (flnms.size() == 0)
-    return;
-
-  if (flnms.count() > 1)
+  if (idx == -1)
     {
-      FilesListDialog fld(flnms);
-      fld.exec();
-      if (fld.result() == QDialog::Rejected)
-	return;
+      QMessageBox::information(0, "Error", "No file type selected");
+      return;
     }
 
-  QFileInfo f(flnms[0]);
-  Global::setPreviousDirectory(f.absolutePath());
-
-  Global::setRGBVolume(false);
-  m_remapWidget->setFile(flnms, RemapWidget::NCVolume);
-}
-
-void
-DrishtiImport::on_actionImage_directory_triggered()
-{
-  QString flnm;
-  flnm = QFileDialog::getExistingDirectory(0,
-					   "Image Directory",
-					   Global::previousDirectory(),
-					   QFileDialog::ShowDirsOnly |
-					   QFileDialog::DontResolveSymlinks);
-  
-  if (flnm.size() == 0)
-    return;
-
-  QFileInfo f(flnm);
-  Global::setPreviousDirectory(f.absolutePath());
-
-  QStringList flnms;
-  flnms << flnm;
-  Global::setRGBVolume(false);
-  m_remapWidget->setFile(flnms, RemapWidget::ImageVolume);
-}
-
-void
-DrishtiImport::on_actionRGB_directory_triggered()
-{
-  QString flnm;
-  flnm = QFileDialog::getExistingDirectory(0,
-					   "Image Directory",
-					   Global::previousDirectory(),
-					   QFileDialog::ShowDirsOnly |
-					   QFileDialog::DontResolveSymlinks);
-  
-  if (flnm.size() == 0)
-    return;
-
-  QFileInfo f(flnm);
-  Global::setPreviousDirectory(f.absolutePath());
-
-  QStringList flnms;
-  flnms << flnm;
-  Global::setRGBVolume(true);
-  m_remapWidget->setFile(flnms, RemapWidget::ImageVolume);
-}
-
-void
-DrishtiImport::on_actionDicom_directory_triggered()
-{
-  QString flnm;
-  flnm = QFileDialog::getExistingDirectory(0,
-					   "Dicom Directory",
-					   Global::previousDirectory(),
-					   QFileDialog::ShowDirsOnly |
-					   QFileDialog::DontResolveSymlinks);
-  
-  if (flnm.size() == 0)
-    return;
-
-  QFileInfo f(flnm);
-  Global::setPreviousDirectory(f.absolutePath());
-
-  QStringList flnms;
-  flnms << flnm;
-  Global::setRGBVolume(false);
-  m_remapWidget->setFile(flnms, RemapWidget::ImageMagickVolume);
-}
-
-void
-DrishtiImport::on_actionImageMagick_directory_triggered()
-{
-  QString flnm;
-  flnm = QFileDialog::getExistingDirectory(0,
-					   "16/32 bit Grayscale Image Directory",
-					   Global::previousDirectory(),
-					   QFileDialog::ShowDirsOnly |
-					   QFileDialog::DontResolveSymlinks);
-  
-  if (flnm.size() == 0)
-    return;
-
-  QFileInfo f(flnm);
-  Global::setPreviousDirectory(f.absolutePath());
-
-  QStringList flnms;
-  flnms << flnm;
-  Global::setRGBVolume(false);
-  m_remapWidget->setFile(flnms, RemapWidget::ImageMagickVolume);
-}
-
-void
-DrishtiImport::on_actionHDF4_directory_triggered()
-{
-  QString flnm;
-  flnm = QFileDialog::getExistingDirectory(0,
-					   "HDF4 Directory",
-					   Global::previousDirectory(),
-					   QFileDialog::ShowDirsOnly |
-					   QFileDialog::DontResolveSymlinks);
-  
-  if (flnm.size() == 0)
-    return;
-
-  QFileInfo f(flnm);
-  Global::setPreviousDirectory(f.absolutePath());
-
-  QStringList flnms;
-  flnms << flnm;
-  Global::setRGBVolume(false);
-  m_remapWidget->setFile(flnms, RemapWidget::HDF4Volume);
-}
-
-void
-DrishtiImport::on_actionRaw_slices_triggered()
-{
-  QString flnm;
-  flnm = QFileDialog::getExistingDirectory(0,
-					   "Raw slices Directory",
-					   Global::previousDirectory(),
-					   QFileDialog::ShowDirsOnly |
-					   QFileDialog::DontResolveSymlinks);
-  
-  if (flnm.size() == 0)
-    return;
-
-  QFileInfo f(flnm);
-  Global::setPreviousDirectory(f.absolutePath());
-
-  QStringList flnms;
-  flnms << flnm;
-  Global::setRGBVolume(false);
-  m_remapWidget->setFile(flnms, RemapWidget::RawSlices);
+  m_remapWidget->handleTimeSeries(m_pluginFileTypes[idx],
+				  m_pluginFileDLib[idx]);
 }
 
 void
@@ -466,76 +449,7 @@ DrishtiImport::dragEnterEvent(QDragEnterEvent *event)
     {
       const QMimeData *data = event->mimeData();
       if (data->hasUrls())
-	{
-	  QList<QUrl> urls = data->urls();
-
-	  QFileInfo f((data->urls())[0].toLocalFile());
-	  if (f.isDir())
-	    {
-	      event->acceptProposedAction();
-	    }
-	  else if (StaticFunctions::checkURLs(urls, ".pvl.nc"))
-	    {
-	      event->acceptProposedAction();
-	    }
-	  else if (StaticFunctions::checkURLs(urls, ".nc"))
-	    {
-	      event->acceptProposedAction();
-	    }
-	  else if (StaticFunctions::checkURLs(urls, ".raw"))
-	    {
-	      event->acceptProposedAction();
-	    }
-	  else if (StaticFunctions::checkURLsRegExp(urls, "*.raw.*"))
-	    {
-	      event->acceptProposedAction();
-	    }
-	  else if (StaticFunctions::checkURLs(urls, ".hdr"))
-	    {
-	      event->acceptProposedAction();
-	    }
-	  else if (StaticFunctions::checkURLs(urls, ".tom"))
-	    {
-	      event->acceptProposedAction();
-	    }
-	  else
-	    {
-	      if (urls.count() == 1)
-		{
-		  bool ok = false;
-		  QStringList slevels;
-		  slevels << "Yes - proceed";
-		  slevels << "No";  
-		  QString option = QInputDialog::getItem(0,
-				   "Drag and Drop",
-				   QString("File ")+
-				   urls[0].toLocalFile()+
-				   QString(" does not have one of the acceptable extensions.\nTreat it as a RAW file?"),
-				   slevels,
-				   0,
-				   false,
-				   &ok);
-		  if (!ok)
-		    return;
-
-		  QStringList op = option.split(' ');
-		  if (op[0] == "Yes")		    
-		    event->acceptProposedAction();
-		}
-	      else
-		{
-		  QString str;
-
-		  for(uint i=0; i<urls.count(); i++)
-		    str += urls[i].toLocalFile().toAscii() + "\n";
-
-		  QMessageBox::information(0, "Drag and Drop",
-					   QString("Some of the following files does not have ")+
-					   QString("one of the acceptable extensions\n")+
-					   str);
-		}
-	    }
-	}
+	  event->acceptProposedAction();
     }
 }
 
@@ -550,163 +464,14 @@ DrishtiImport::dropEvent(QDropEvent *event)
 	  QUrl url = data->urls()[0];
 	  QFileInfo info(url.toLocalFile());
 	  if (info.isDir())
-	    {
-	      QStringList dtypes;
-	      dtypes << "Standard Images"
-		     << "Standard Images for RGB volume"
-		     << "Dicom Images"
-		     << "16/32 bit Grayscale Images"
-		     << "HDF4"
-	             << "Raw slices";
-	      QString option = QInputDialog::getItem(0,
-						     "Select Directory Type",
-						     "Directory Type",
-						     dtypes,
-						     0,
-						     false);
-
-	      QFileInfo f(url.toLocalFile());
-	      Global::setPreviousDirectory(f.absolutePath());
-
-	      QStringList flnms;
-	      flnms << url.toLocalFile();
-
-	      Global::setRGBVolume(false);
-	      if (option == "Standard Images for RGB volume")
-		{
-		  Global::setRGBVolume(true);
-		  m_remapWidget->setFile(flnms, RemapWidget::ImageVolume);
-		}
-	      else if (option == "Standard Images")
-		m_remapWidget->setFile(flnms, RemapWidget::ImageVolume);
-	      else if (option == "HDF4")
-		m_remapWidget->setFile(flnms, RemapWidget::HDF4Volume);
-	      else if (option == "Raw slices")
-		m_remapWidget->setFile(flnms, RemapWidget::RawSlices);
-	      else
-		m_remapWidget->setFile(flnms, RemapWidget::ImageMagickVolume);
-	    }
+	    loadDirectory(url.toLocalFile(), -1);
 	  if (info.exists() && info.isFile())
 	    {
-	      if (StaticFunctions::checkExtension(url.toLocalFile(), ".pvl.nc"))
-		{
-		  bool ok = false;
-		  QStringList slevels;
-		  slevels << "Yes - proceed";
-		  slevels << "No";  
-		  QString option = QInputDialog::getItem(0,
-				   "Drag and Drop",
-				   QString("Convert ")+
-				   url.toLocalFile()+
-				   QString(" to new format ?"),
-				   slevels,
-				   0,
-				   false,
-				   &ok);
-		  if (!ok)
-		    return;
+	      QStringList flnms;
+	      for(uint i=0; i<data->urls().count(); i++)
+		flnms << (data->urls())[i].toLocalFile();
 
-		  QStringList op = option.split(' ');
-		  if (op[0] == "No")		    
-		    return;
-
-		  QStringList flnms;
-		  for(uint i=0; i<data->urls().count(); i++)
-		    flnms << (data->urls())[i].toLocalFile();
-
-		  Old2New(flnms);
-		}
-	      else if (StaticFunctions::checkExtension(url.toLocalFile(), ".nc"))
-		{
-		  QFileInfo f((data->urls())[0].toLocalFile());
-		  Global::setPreviousDirectory(f.absolutePath());
-
-		  QStringList flnms;
-		  for(uint i=0; i<data->urls().count(); i++)
-		    flnms << (data->urls())[i].toLocalFile();
-
-		  if (flnms.count() > 1)
-		    {
-		      FilesListDialog fld(flnms);
-		      fld.exec();
-		      if (fld.result() == QDialog::Rejected)
-			return;
-		    }
-
-		  Global::setRGBVolume(false);
-		  m_remapWidget->setFile(flnms, RemapWidget::NCVolume);
-		}
-	      else if (StaticFunctions::checkExtension(url.toLocalFile(), ".raw"))
-		{
-		  QFileInfo f((data->urls())[0].toLocalFile());
-		  Global::setPreviousDirectory(f.absolutePath());
-		  
-		  QStringList flnms;
-		  for(uint i=0; i<data->urls().count(); i++)
-		    flnms << (data->urls())[i].toLocalFile();
-		  
-		  Global::setRGBVolume(false);
-		  if (flnms.count() == 1)
-		    m_remapWidget->setFile(flnms, RemapWidget::RAWVolume);
-		  else
-		    m_remapWidget->setFile(flnms, RemapWidget::RawSlabs);
-		}
-	      else if (StaticFunctions::checkRegExp(url.toLocalFile(), "*.raw.*"))
-		{
-		  QFileInfo f((data->urls())[0].toLocalFile());
-		  Global::setPreviousDirectory(f.absolutePath());
-		  
-		  QStringList flnms;
-		  for(uint i=0; i<data->urls().count(); i++)
-		    flnms << (data->urls())[i].toLocalFile();
-		  
-		  if (flnms.count() > 1)
-		    {
-		      FilesListDialog fld(flnms);
-		      fld.exec();
-		      if (fld.result() == QDialog::Rejected)
-			return;
-		    }
-
-		  Global::setRGBVolume(false);
-		  m_remapWidget->setFile(flnms, RemapWidget::RawSlabs);
-		}
-	      else if (StaticFunctions::checkExtension(url.toLocalFile(), ".hdr"))
-		{
-		  QFileInfo f((data->urls())[0].toLocalFile());
-		  Global::setPreviousDirectory(f.absolutePath());
-		  
-		  QStringList flnms;
-		  for(uint i=0; i<data->urls().count(); i++)
-		    flnms << (data->urls())[i].toLocalFile();
-		  
-		  Global::setRGBVolume(false);
-		  m_remapWidget->setFile(flnms, RemapWidget::AnalyzeVolume);
-		}
-	      else if (StaticFunctions::checkExtension(url.toLocalFile(), ".tom"))
-		{
-		  QFileInfo f((data->urls())[0].toLocalFile());
-		  Global::setPreviousDirectory(f.absolutePath());
-		  
-		  QStringList flnms;
-		  for(uint i=0; i<data->urls().count(); i++)
-		    flnms << (data->urls())[i].toLocalFile();
-		  
-		  Global::setRGBVolume(false);
-		  m_remapWidget->setFile(flnms, RemapWidget::TOMVolume);
-		}
-	      else // -- treat the file as raw file
-		{
-		  QFileInfo f((data->urls())[0].toLocalFile());
-		  Global::setPreviousDirectory(f.absolutePath());
-		  
-		  QStringList flnms;
-		  for(uint i=0; i<data->urls().count(); i++)
-		    flnms << (data->urls())[i].toLocalFile();
-		  
-		  Global::setRGBVolume(false);
-		  m_remapWidget->setFile(flnms, RemapWidget::RAWVolume);
-		}
+	      loadFiles(flnms, -1);
 	    }
 	}
     }

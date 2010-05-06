@@ -3,6 +3,19 @@
 #include "rawslicesplugin.h"
 #include "loadrawdialog.h"
 
+QStringList
+RawSlicesPlugin::registerPlugin()
+{
+  QStringList regString;
+  regString << "directory";
+  regString << "RAW Slices Directory";
+  regString << "*.raw *";
+  regString << "files";
+  regString << "RAW Slice Files";
+  
+  return regString;
+}
+
 void
 RawSlicesPlugin::init()
 {
@@ -17,11 +30,6 @@ RawSlicesPlugin::init()
   m_bytesPerVoxel = 1;
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
-
-  m_rawMap.clear();
-  m_pvlMap.clear();
-
-  m_image = 0;
 }
 
 void
@@ -38,13 +46,6 @@ RawSlicesPlugin::clear()
   m_bytesPerVoxel = 1;
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
-
-  m_rawMap.clear();
-  m_pvlMap.clear();
-
-  if (m_image)
-    delete [] m_image;
-  m_image = 0;
 }
 
 void
@@ -70,16 +71,6 @@ RawSlicesPlugin::setMinMax(float rmin, float rmax)
 float RawSlicesPlugin::rawMin() { return m_rawMin; }
 float RawSlicesPlugin::rawMax() { return m_rawMax; }
 QList<uint> RawSlicesPlugin::histogram() { return m_histogram; }
-QList<float> RawSlicesPlugin::rawMap() { return m_rawMap; }
-QList<uchar> RawSlicesPlugin::pvlMap() { return m_pvlMap; }
-
-void
-RawSlicesPlugin::setMap(QList<float> rm,
-		  QList<uchar> pm)
-{
-  m_rawMap = rm;
-  m_pvlMap = pm;
-}
 
 void
 RawSlicesPlugin::gridSize(int& d, int& w, int& h)
@@ -103,25 +94,29 @@ RawSlicesPlugin::setFile(QStringList files)
 
   m_imageList.clear();
 
-
-  // list all image files in the directory
-  QStringList imageNameFilter;
-  imageNameFilter << "*";
-  QStringList imgfiles= QDir(m_fileName[0]).entryList(imageNameFilter,
-						      QDir::NoSymLinks|
-						      QDir::NoDotAndDotDot|
-						      QDir::Readable|
-						      QDir::Files);
-
-
-  m_imageList.clear();
-  for(uint i=0; i<imgfiles.size(); i++)
+  QFileInfo f(m_fileName[0]);
+  if (f.isDir())
     {
-      QFileInfo fileInfo(m_fileName[0], imgfiles[i]);
-      QString imgfl = fileInfo.absoluteFilePath();
-      m_imageList.append(imgfl);
-    }
+      // list all image files in the directory
+      QStringList imageNameFilter;
+      imageNameFilter << "*";
+      QStringList imgfiles= QDir(m_fileName[0]).entryList(imageNameFilter,
+							  QDir::NoSymLinks|
+							  QDir::NoDotAndDotDot|
+							  QDir::Readable|
+							  QDir::Files);
 
+
+      m_imageList.clear();
+      for(uint i=0; i<imgfiles.size(); i++)
+	{
+	  QFileInfo fileInfo(m_fileName[0], imgfiles[i]);
+	  QString imgfl = fileInfo.absoluteFilePath();
+	  m_imageList.append(imgfl);
+	}
+    }
+  else
+    m_imageList = files;
 
   // --- load various parameters from the raw file ---
   LoadRawDialog loadRawDialog(0,
@@ -161,11 +156,6 @@ RawSlicesPlugin::setFile(QStringList files)
       findMinMax();
       generateHistogram();
     }
-
-  m_rawMap.append(m_rawMin);
-  m_rawMap.append(m_rawMax);
-  m_pvlMap.append(0);
-  m_pvlMap.append(255);
 
   return true;
 }
@@ -214,15 +204,15 @@ RawSlicesPlugin::findMinMaxandGenerateHistogram()
       return;
     }
 
-  //==================
-  // do not calculate histogram
-  if (m_voxelType == _UChar)
-    {
-      m_rawMin = 0;
-      m_rawMax = 255;
-      return;
-    }
-  //==================
+//  //==================
+//  // do not calculate histogram
+//  if (m_voxelType == _UChar)
+//    {
+//      m_rawMin = 0;
+//      m_rawMax = 255;
+//      return;
+//    }
+//  //==================
 
   int nbytes = m_width*m_height*m_bytesPerVoxel;
   uchar *tmp = new uchar[nbytes];
@@ -492,167 +482,26 @@ RawSlicesPlugin::getDepthSlice(int slc,
   fin.close();
 }
 
-QImage
-RawSlicesPlugin::getDepthSliceImage(int slc)
+void
+RawSlicesPlugin::getWidthSlice(int slc,
+			       uchar *slice)
 {
-  if (m_image)
-    delete [] m_image;
-  m_image = new uchar[m_width*m_height];
-
-  int nbytes = m_width*m_height*m_bytesPerVoxel;
-  uchar *tmp = new uchar[nbytes];
-
-  //----------------------------
-  QFile fin(m_imageList[slc]);
-  fin.open(QFile::ReadOnly);
-  fin.seek(m_headerBytes);
-  fin.read((char*)tmp, nbytes);
-  fin.close();
-  //----------------------------
-
-  int rawSize = m_rawMap.size()-1;
-  for(uint i=0; i<m_width*m_height; i++)
-    {
-      int idx = m_rawMap.size()-1;
-      float frc = 0;
-      float v;
-
-      if (m_voxelType == _UChar)
-	v = ((uchar *)tmp)[i];
-      else if (m_voxelType == _Char)
-	v = ((char *)tmp)[i];
-      else if (m_voxelType == _UShort)
-	v = ((ushort *)tmp)[i];
-      else if (m_voxelType == _Short)
-	v = ((short *)tmp)[i];
-      else if (m_voxelType == _Int)
-	v = ((int *)tmp)[i];
-      else if (m_voxelType == _Float)
-	v = ((float *)tmp)[i];
-
-      if (v < m_rawMap[0])
-	{
-	  idx = 0;
-	  frc = 0;
-	}
-      else if (v > m_rawMap[rawSize])
-	{
-	  idx = rawSize-1;
-	  frc = 1;
-	}
-      else
-	{
-	  for(uint m=0; m<rawSize; m++)
-	    {
-	      if (v >= m_rawMap[m] &&
-		  v <= m_rawMap[m+1])
-		{
-		  idx = m;
-		  frc = ((float)v-(float)m_rawMap[m])/
-		    ((float)m_rawMap[m+1]-(float)m_rawMap[m]);
-		}
-	    }
-	}
-
-      uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
-      m_image[i] = pv;
-    }
-  QImage img = QImage(m_image,
-		      m_height, m_width, m_height,
-		      QImage::Format_Indexed8);
-
-  delete [] tmp;
-
-  return img;
-}
-
-QImage
-RawSlicesPlugin::getWidthSliceImage(int slc)
-{
-  if (m_image)
-    delete [] m_image;
-  m_image = new uchar[m_depth*m_height];
-
-  int nbytes = m_depth*m_height*m_bytesPerVoxel;
-  uchar *tmp = new uchar[nbytes];
-
   for(uint i=0; i<m_depth; i++)
     {
       QFile fin(m_imageList[i]);
       fin.open(QFile::ReadOnly);
       fin.seek(m_headerBytes +
 	       slc*m_height*m_bytesPerVoxel);
-      fin.read((char*)(tmp+i*m_height*m_bytesPerVoxel),
+      fin.read((char*)(slice+i*m_height*m_bytesPerVoxel),
 	       m_height*m_bytesPerVoxel);
       fin.close();
     }
-
-  int rawSize = m_rawMap.size()-1;
-  for(uint i=0; i<m_depth*m_height; i++)
-    {
-      int idx = m_rawMap.size()-1;
-      float frc = 0;
-      float v;
-
-      if (m_voxelType == _UChar)
-	v = ((uchar *)tmp)[i];
-      else if (m_voxelType == _Char)
-	v = ((char *)tmp)[i];
-      else if (m_voxelType == _UShort)
-	v = ((ushort *)tmp)[i];
-      else if (m_voxelType == _Short)
-	v = ((short *)tmp)[i];
-      else if (m_voxelType == _Int)
-	v = ((int *)tmp)[i];
-      else if (m_voxelType == _Float)
-	v = ((float *)tmp)[i];
-
-      if (v < m_rawMap[0])
-	{
-	  idx = 0;
-	  frc = 0;
-	}
-      else if (v > m_rawMap[rawSize])
-	{
-	  idx = rawSize-1;
-	  frc = 1;
-	}
-      else
-	{
-	  for(uint m=0; m<rawSize; m++)
-	    {
-	      if (v >= m_rawMap[m] &&
-		  v <= m_rawMap[m+1])
-		{
-		  idx = m;
-		  frc = ((float)v-(float)m_rawMap[m])/
-		    ((float)m_rawMap[m+1]-(float)m_rawMap[m]);
-		}
-	    }
-	}
-
-      uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
-      m_image[i] = pv;
-    }
-  QImage img = QImage(m_image,
-		      m_height, m_depth, m_height,
-		      QImage::Format_Indexed8);
-
-  delete [] tmp;
-
-  return img;
 }
 
-QImage
-RawSlicesPlugin::getHeightSliceImage(int slc)
+void
+RawSlicesPlugin::getHeightSlice(int slc,
+				uchar *slice)
 {
-  if (m_image)
-    delete [] m_image;
-  m_image = new uchar[m_depth*m_width];
-
-  int nbytes = m_depth*m_width*m_bytesPerVoxel;
-  uchar *tmp = new uchar[nbytes];
-
   int ndum = m_width*m_height*m_bytesPerVoxel;
   uchar *dum = new uchar[ndum];  
   uint it=0;
@@ -666,90 +515,32 @@ RawSlicesPlugin::getHeightSliceImage(int slc)
 
       for(uint j=0; j<m_width; j++)
 	{
-	  memcpy(tmp+it*m_bytesPerVoxel,
+	  memcpy(slice+it*m_bytesPerVoxel,
 		 dum+(j*m_height+slc)*m_bytesPerVoxel,
 		 m_bytesPerVoxel);
 	  it++;
 	}
     }
   delete [] dum;
-
-  int rawSize = m_rawMap.size()-1;
-  for(uint i=0; i<m_depth*m_width; i++)
-    {
-      int idx = m_rawMap.size()-1;
-      float frc = 0;
-      float v;
-
-      if (m_voxelType == _UChar)
-	v = ((uchar *)tmp)[i];
-      else if (m_voxelType == _Char)
-	v = ((char *)tmp)[i];
-      else if (m_voxelType == _UShort)
-	v = ((ushort *)tmp)[i];
-      else if (m_voxelType == _Short)
-	v = ((short *)tmp)[i];
-      else if (m_voxelType == _Int)
-	v = ((int *)tmp)[i];
-      else if (m_voxelType == _Float)
-	v = ((float *)tmp)[i];
-
-      if (v < m_rawMap[0])
-	{
-	  idx = 0;
-	  frc = 0;
-	}
-      else if (v > m_rawMap[rawSize])
-	{
-	  idx = rawSize-1;
-	  frc = 1;
-	}
-      else
-	{
-	  for(uint m=0; m<rawSize; m++)
-	    {
-	      if (v >= m_rawMap[m] &&
-		  v <= m_rawMap[m+1])
-		{
-		  idx = m;
-		  frc = ((float)v-(float)m_rawMap[m])/
-		    ((float)m_rawMap[m+1]-(float)m_rawMap[m]);
-		}
-	    }
-	}
-
-      uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
-      m_image[i] = pv;
-    }
-  QImage img = QImage(m_image,
-		      m_width, m_depth, m_width,
-		      QImage::Format_Indexed8);
-
-  delete [] tmp;
-
-  return img;
 }
 
-QPair<QVariant, QVariant>
+QVariant
 RawSlicesPlugin::rawValue(int d, int w, int h)
 {
-  QPair<QVariant, QVariant> pair;
+  QVariant v;
 
   if (d < 0 || d >= m_depth ||
       w < 0 || w >= m_width ||
       h < 0 || h >= m_height)
     {
-      pair.first = QVariant("OutOfBounds");
-      pair.second = QVariant("OutOfBounds");
-      return pair;
+      v = QVariant("OutOfBounds");
+      return v;
     }
 
   QFile fin(m_imageList[d]);
   fin.open(QFile::ReadOnly);
   fin.seek(m_headerBytes +
 	   m_bytesPerVoxel*(w*m_height +h));
-
-  QVariant v;
 
   if (m_voxelType == _UChar)
     {
@@ -788,49 +579,8 @@ RawSlicesPlugin::rawValue(int d, int w, int h)
       v = QVariant((double)a);
     }
   fin.close();
-  
 
-  int rawSize = m_rawMap.size()-1;
-  int idx = rawSize;
-  float frc = 0;
-  float val;
-
-  if (v.type() == QVariant::UInt)
-    val = v.toUInt();
-  else if (v.type() == QVariant::Int)
-    val = v.toInt();
-  else if (v.type() == QVariant::Double)
-    val = v.toDouble();
-
-  if (val <= m_rawMap[0])
-    {
-      idx = 0;
-      frc = 0;
-    }
-  else if (val >= m_rawMap[rawSize])
-    {
-      idx = rawSize-1;
-      frc = 1;
-    }
-  else
-    {
-      for(uint m=0; m<rawSize; m++)
-	{
-	  if (val >= m_rawMap[m] &&
-	      val <= m_rawMap[m+1])
-	    {
-	      idx = m;
-	      frc = ((float)val-(float)m_rawMap[m])/
-		((float)m_rawMap[m+1]-(float)m_rawMap[m]);
-	    }
-	}
-    }
-  
-  uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
-
-  pair.first = v;
-  pair.second = QVariant((uint)pv);
-  return pair;
+  return v;
 }
 
 void

@@ -8,6 +8,8 @@ class VolInterface
  public :
   virtual ~VolInterface() {}
 
+  virtual QStringList registerPlugin() = 0;
+
   virtual void init() = 0;
   virtual void clear() = 0;
 
@@ -26,20 +28,14 @@ class VolInterface
   virtual void setMinMax(float, float) = 0;
   virtual float rawMin() = 0;
   virtual float rawMax() = 0;
-   
-  virtual void setMap(QList<float>,
-		      QList<uchar>) = 0;
 
-  virtual QList<float> rawMap() = 0;
-  virtual QList<uchar> pvlMap() = 0;
+  virtual void generateHistogram() = 0;
 
   virtual void getDepthSlice(int, uchar*) = 0;
+  virtual void getWidthSlice(int, uchar*) = 0;
+  virtual void getHeightSlice(int, uchar*) = 0;
 
-  virtual QImage getDepthSliceImage(int) = 0;
-  virtual QImage getWidthSliceImage(int) = 0;
-  virtual QImage getHeightSliceImage(int) = 0;
-
-  virtual QPair<QVariant,QVariant> rawValue(int, int, int) = 0;
+  virtual QVariant rawValue(int, int, int) = 0;
 
   virtual void saveTrimmed(QString,
 			   int, int, int, int, int, int) = 0;

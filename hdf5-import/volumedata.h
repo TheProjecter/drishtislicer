@@ -1,21 +1,19 @@
-#ifndef NCPLUGIN_H
-#define NCPLUGIN_H
+#ifndef VOLUMEDATA_H
+#define VOLUMEDATA_H
 
-#include <QObject>
 #include "volinterface.h"
 
-class NcPlugin : public QObject, VolInterface
+#include <QObject>
+
+class VolumeData : public QObject
 {
   Q_OBJECT
-  Q_INTERFACES(VolInterface)
 
  public :
-  QStringList registerPlugin();
+  VolumeData();
+  ~VolumeData();
 
-  void init();
-  void clear();
-
-  bool setFile(QStringList);
+  bool setFile(QStringList, QString);
   void replaceFile(QString);
 
   void gridSize(int&, int&, int&);
@@ -31,20 +29,28 @@ class NcPlugin : public QObject, VolInterface
   float rawMin();
   float rawMax();
    
-  void getDepthSlice(int, uchar*);
-  void getWidthSlice(int, uchar*);
-  void getHeightSlice(int, uchar*);
+  void setMap(QList<float>, QList<uchar>);
 
-  QVariant rawValue(int, int, int);
+  QList<float> rawMap();
+  QList<uchar> pvlMap();
+
+  void getDepthSlice(int, uchar*);
+
+  QImage getDepthSliceImage(int);
+  QImage getWidthSliceImage(int);
+  QImage getHeightSliceImage(int);
+
+  QPair<QVariant,QVariant> rawValue(int, int, int);
 
   void saveTrimmed(QString, int, int, int, int, int, int);
 
-  void generateHistogram();
  private :
+  VolInterface *m_volInterface;
+
   QStringList m_fileName;
   int m_depth, m_width, m_height;
-  int m_voxelType;
   int m_voxelUnit;
+  int m_voxelType;
   int m_headerBytes;
   float m_voxelSizeX;
   float m_voxelSizeY;
@@ -54,15 +60,16 @@ class NcPlugin : public QObject, VolInterface
   float m_rawMin, m_rawMax;
   QList<uint> m_histogram;
 
+  QList<float> m_rawMap;
+  QList<uchar> m_pvlMap;
+   
+  unsigned char *m_image;
+
   int m_skipBytes;
   int m_bytesPerVoxel;
 
-  QList<int> m_depthList;
-  QString m_varName;
-
-  QList<QString> listAllVariables();
-  void findMinMax();
-  void findMinMaxandGenerateHistogram();
+  void clear();
+  bool loadPlugin(QString);
 };
 
 #endif

@@ -6,6 +6,20 @@
 using namespace std;
 using namespace Magick;
 
+void MagickPlugin::generateHistogram() {} // to satisfy the interface
+
+QStringList
+MagickPlugin::registerPlugin()
+{
+  QStringList regString;
+  regString << "directory";
+  regString << "DICOM/16bit Image Directory";
+  regString << "files";
+  regString << "DICOM/16bit Image Files";
+  
+  return regString;
+}
+
 void
 MagickPlugin::init()
 {
@@ -20,11 +34,6 @@ MagickPlugin::init()
   m_bytesPerVoxel = 1;
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
-
-  m_rawMap.clear();
-  m_pvlMap.clear();
-
-  m_image = 0;
 }
 
 void
@@ -41,13 +50,6 @@ MagickPlugin::clear()
   m_bytesPerVoxel = 1;
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
-
-  m_rawMap.clear();
-  m_pvlMap.clear();
-
-  if (m_image)
-    delete [] m_image;
-  m_image = 0;
 }
 
 void
@@ -71,16 +73,6 @@ MagickPlugin::setMinMax(float rmin, float rmax)
 float MagickPlugin::rawMin() { return m_rawMin; }
 float MagickPlugin::rawMax() { return m_rawMax; }
 QList<uint> MagickPlugin::histogram() { return m_histogram; }
-QList<float> MagickPlugin::rawMap() { return m_rawMap; }
-QList<uchar> MagickPlugin::pvlMap() { return m_pvlMap; }
-
-void
-MagickPlugin::setMap(QList<float> rm,
-		  QList<uchar> pm)
-{
-  m_rawMap = rm;
-  m_pvlMap = pm;
-}
 
 void
 MagickPlugin::gridSize(int& d, int& w, int& h)
@@ -114,7 +106,14 @@ class tag
 };
 
 void
-MagickPlugin::getFileList(QList<QString> files)
+MagickPlugin::replaceFile(QString flnm)
+{
+  m_fileName.clear();
+  m_fileName << flnm;
+}
+
+void
+MagickPlugin::setImageFiles(QStringList files)
 {
   QProgressDialog progress("Enumerating files - may take some time...",
 			   0,
@@ -171,32 +170,6 @@ MagickPlugin::getFileList(QList<QString> files)
 
   progress.setValue(100);
   qApp->processEvents();
-}
-
-void
-MagickPlugin::replaceFile(QString flnm)
-{
-  m_fileName.clear();
-  m_fileName << flnm;
-}
-
-bool
-MagickPlugin::setFile(QStringList files)
-{
-  m_fileName = files;
-
-  m_imageList.clear();
-
-  // list all image files in the directory
-  QStringList imageNameFilter;
-  imageNameFilter << "*";
-  QStringList imgfiles= QDir(m_fileName[0]).entryList(imageNameFilter,
-						      QDir::NoSymLinks|
-						      QDir::NoDotAndDotDot|
-						      QDir::Readable|
-						      QDir::Files);
-
-  getFileList(imgfiles);
 
   m_depth = m_imageList.size();
   Image image((char*)m_imageList[0].toAscii().data());
@@ -226,16 +199,36 @@ MagickPlugin::setFile(QStringList files)
       m_voxelType == _Short)
     findMinMaxandGenerateHistogram();
   else
-    {
-      QMessageBox::information(0, "Error",
+    QMessageBox::information(0, "Error",
 			       "Currently accepting only 1- and 2-byte images");
-      return false;
-    }
+}
 
-  m_rawMap.append(m_rawMin);
-  m_rawMap.append(m_rawMax);
-  m_pvlMap.append(0);
-  m_pvlMap.append(255);
+bool
+MagickPlugin::setFile(QStringList files)
+{
+  if (files.size() == 0)
+    return false;
+
+  m_fileName = files;
+
+  m_imageList.clear();
+
+  QFileInfo f(m_fileName[0]);
+  if (f.isDir())
+    {
+      // list all image files in the directory
+      QStringList imageNameFilter;
+      imageNameFilter << "*";
+      QStringList imgfiles= QDir(m_fileName[0]).entryList(imageNameFilter,
+							  QDir::NoSymLinks|
+							  QDir::NoDotAndDotDot|
+							  QDir::Readable|
+							  QDir::Files);
+      
+      setImageFiles(imgfiles);
+    }
+  else
+    setImageFiles(files);
 
   return true;
 }
@@ -405,119 +398,10 @@ MagickPlugin::getDepthSlice(int slc,
   delete [] tmp1;
 }
 
-QImage
-MagickPlugin::getDepthSliceImage(int slc)
+void
+MagickPlugin::getWidthSlice(int slc,
+			    uchar *slice)
 {
-  if (m_image)
-    delete [] m_image;
-  m_image = new uchar[m_width*m_height];
-
-  int nbytes = m_width*m_height*m_bytesPerVoxel;
-  uchar *tmp = new uchar[nbytes];
-  uchar *tmp1 = new uchar[nbytes];
-
-  Image imgL;
-  imgL.defineSet("dcm", "display-range");
-  imgL.defineValue("dcm", "display-range", "reset");
-  imgL.read((char*)m_imageList[slc].toAscii().data());
-
-  StorageType storageType = CharPixel;
-  if (m_voxelType == _UShort) storageType = ShortPixel;
-  if (m_voxelType == _Float) storageType = FloatPixel;
-  imgL.write(0, 0,
-	     imgL.columns(), imgL.rows(),
-	     "I",
-	     storageType,
-	     tmp1);
-
-  if (m_voxelType == _UChar)
-    {
-      for(uint j=0; j<m_width; j++)
-	for(uint k=0; k<m_height; k++)
-	  tmp[j*m_height+k] = tmp1[k*m_width+j];
-    }
-  else if (m_voxelType == _UShort)
-    {
-      ushort *p0 = (ushort*)tmp;
-      ushort *p1 = (ushort*)tmp1;
-      for(uint j=0; j<m_width; j++)
-	for(uint k=0; k<m_height; k++)
-	  p0[j*m_height+k] = p1[k*m_width+j];
-    }
-  else if (m_voxelType == _Float)
-    {
-      float *p0 = (float*)tmp;
-      float *p1 = (float*)tmp1;
-      for(uint j=0; j<m_width; j++)
-	for(uint k=0; k<m_height; k++)
-	  p0[j*m_height+k] = p1[k*m_width+j];
-    }
-  delete [] tmp1;
-
-  int rawSize = m_rawMap.size()-1;
-  for(uint i=0; i<m_width*m_height; i++)
-    {
-      int idx = m_rawMap.size()-1;
-      float frc = 0;
-      float v;
-
-      if (m_voxelType == _UChar)
-	v = ((uchar *)tmp)[i];
-      else if (m_voxelType == _Char)
-	v = ((char *)tmp)[i];
-      else if (m_voxelType == _UShort)
-	v = ((ushort *)tmp)[i];
-      else if (m_voxelType == _Short)
-	v = ((short *)tmp)[i];
-      else if (m_voxelType == _Int)
-	v = ((int *)tmp)[i];
-      else if (m_voxelType == _Float)
-	v = ((float *)tmp)[i];
-
-      if (v < m_rawMap[0])
-	{
-	  idx = 0;
-	  frc = 0;
-	}
-      else if (v > m_rawMap[rawSize])
-	{
-	  idx = rawSize-1;
-	  frc = 1;
-	}
-      else
-	{
-	  for(uint m=0; m<rawSize; m++)
-	    {
-	      if (v >= m_rawMap[m] &&
-		  v <= m_rawMap[m+1])
-		{
-		  idx = m;
-		  frc = ((float)v-(float)m_rawMap[m])/
-		    ((float)m_rawMap[m+1]-(float)m_rawMap[m]);
-		}
-	    }
-	}
-
-      uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
-      m_image[i] = pv;
-    }
-  QImage img = QImage(m_image, m_height, m_width, m_height, QImage::Format_Indexed8);
-
-  delete [] tmp;
-
-  return img;
-}
-
-QImage
-MagickPlugin::getWidthSliceImage(int slc)
-{
-  if (m_image)
-    delete [] m_image;
-  m_image = new uchar[m_depth*m_height];
-
-  int nbytes = m_depth*m_height*m_bytesPerVoxel;
-  uchar *tmp = new uchar[nbytes];
-
   QProgressDialog progress("Extracting Slice",
 			   0,
 			   0, 100,
@@ -548,18 +432,18 @@ MagickPlugin::getWidthSliceImage(int slc)
       if (m_voxelType == _UChar)
 	{
 	  for(uint j=0; j<m_height; j++)
-	    tmp[i*m_height+j] = imgSlice[j];
+	    slice[i*m_height+j] = imgSlice[j];
 	}
       else if (m_voxelType == _UShort)
 	{
-	  ushort *p0 = (ushort*)tmp;
+	  ushort *p0 = (ushort*)slice;
 	  ushort *p1 = (ushort*)imgSlice;
 	  for(uint j=0; j<m_height; j++)
 	    p0[i*m_height+j] = p1[j];
 	}
       else if (m_voxelType == _Float)
 	{
-	  float *p0 = (float*)tmp;
+	  float *p0 = (float*)slice;
 	  float *p1 = (float*)imgSlice;
 	  for(uint j=0; j<m_height; j++)
 	    p0[i*m_height+j] = p1[j];
@@ -568,71 +452,12 @@ MagickPlugin::getWidthSliceImage(int slc)
   delete [] imgSlice;
   progress.setValue(100);
   qApp->processEvents();
-
-  int rawSize = m_rawMap.size()-1;
-  for(uint i=0; i<m_depth*m_height; i++)
-    {
-      int idx = m_rawMap.size()-1;
-      float frc = 0;
-      float v;
-
-      if (m_voxelType == _UChar)
-	v = ((uchar *)tmp)[i];
-      else if (m_voxelType == _Char)
-	v = ((char *)tmp)[i];
-      else if (m_voxelType == _UShort)
-	v = ((ushort *)tmp)[i];
-      else if (m_voxelType == _Short)
-	v = ((short *)tmp)[i];
-      else if (m_voxelType == _Int)
-	v = ((int *)tmp)[i];
-      else if (m_voxelType == _Float)
-	v = ((float *)tmp)[i];
-
-      if (v < m_rawMap[0])
-	{
-	  idx = 0;
-	  frc = 0;
-	}
-      else if (v > m_rawMap[rawSize])
-	{
-	  idx = rawSize-1;
-	  frc = 1;
-	}
-      else
-	{
-	  for(uint m=0; m<rawSize; m++)
-	    {
-	      if (v >= m_rawMap[m] &&
-		  v <= m_rawMap[m+1])
-		{
-		  idx = m;
-		  frc = ((float)v-(float)m_rawMap[m])/
-		    ((float)m_rawMap[m+1]-(float)m_rawMap[m]);
-		}
-	    }
-	}
-
-      uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
-      m_image[i] = pv;
-    }
-  QImage img = QImage(m_image, m_height, m_depth, m_height, QImage::Format_Indexed8);
-
-  delete [] tmp;
-
-  return img;
 }
 
-QImage
-MagickPlugin::getHeightSliceImage(int slc)
+void
+MagickPlugin::getHeightSlice(int slc,
+			     uchar *slice)
 {
-  if (m_image)
-    delete [] m_image;
-  m_image = new uchar[m_depth*m_width];
-
-  int nbytes = m_depth*m_width*m_bytesPerVoxel;
-  uchar *tmp = new uchar[nbytes];
-
   uchar *imgSlice = new uchar[m_width*m_height*m_bytesPerVoxel];
   QProgressDialog progress("Extracting Slice",
 			   0,
@@ -662,18 +487,18 @@ MagickPlugin::getHeightSliceImage(int slc)
       if (m_voxelType == _UChar)
 	{
 	  for(uint j=0; j<m_width; j++)
-	    tmp[i*m_width+j] = imgSlice[j];
+	    slice[i*m_width+j] = imgSlice[j];
 	}
       else if (m_voxelType == _UShort)
 	{
-	  ushort *p0 = (ushort*)tmp;
+	  ushort *p0 = (ushort*)slice;
 	  ushort *p1 = (ushort*)imgSlice;
 	  for(uint j=0; j<m_width; j++)
 	    p0[i*m_width+j] = p1[j];
 	}
       else if (m_voxelType == _Float)
 	{
-	  float *p0 = (float*)tmp;
+	  float *p0 = (float*)slice;
 	  float *p1 = (float*)imgSlice;
 	  for(uint j=0; j<m_width; j++)
 	    p0[i*m_width+j] = p1[j];
@@ -682,73 +507,19 @@ MagickPlugin::getHeightSliceImage(int slc)
   delete [] imgSlice;
   progress.setValue(100);
   qApp->processEvents();
-
-  int rawSize = m_rawMap.size()-1;
-  for(uint i=0; i<m_depth*m_width; i++)
-    {
-      int idx = m_rawMap.size()-1;
-      float frc = 0;
-      float v;
-
-      if (m_voxelType == _UChar)
-	v = ((uchar *)tmp)[i];
-      else if (m_voxelType == _Char)
-	v = ((char *)tmp)[i];
-      else if (m_voxelType == _UShort)
-	v = ((ushort *)tmp)[i];
-      else if (m_voxelType == _Short)
-	v = ((short *)tmp)[i];
-      else if (m_voxelType == _Int)
-	v = ((int *)tmp)[i];
-      else if (m_voxelType == _Float)
-	v = ((float *)tmp)[i];
-
-      if (v < m_rawMap[0])
-	{
-	  idx = 0;
-	  frc = 0;
-	}
-      else if (v > m_rawMap[rawSize])
-	{
-	  idx = rawSize-1;
-	  frc = 1;
-	}
-      else
-	{
-	  for(uint m=0; m<rawSize; m++)
-	    {
-	      if (v >= m_rawMap[m] &&
-		  v <= m_rawMap[m+1])
-		{
-		  idx = m;
-		  frc = ((float)v-(float)m_rawMap[m])/
-		    ((float)m_rawMap[m+1]-(float)m_rawMap[m]);
-		}
-	    }
-	}
-
-      uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
-      m_image[i] = pv;
-    }
-  QImage img = QImage(m_image, m_width, m_depth, m_width, QImage::Format_Indexed8);
-
-  delete [] tmp;
-
-  return img;
 }
 
-QPair<QVariant, QVariant>
+QVariant
 MagickPlugin::rawValue(int d, int w, int h)
 {
-  QPair<QVariant, QVariant> pair;
+  QVariant v;
 
   if (d < 0 || d >= m_depth ||
       w < 0 || w >= m_width ||
       h < 0 || h >= m_height)
     {
-      pair.first = QVariant("OutOfBounds");
-      pair.second = QVariant("OutOfBounds");
-      return pair;
+      v = QVariant("OutOfBounds");
+      return v;
     }
 
   uchar *tmp = new uchar[10];
@@ -768,7 +539,6 @@ MagickPlugin::rawValue(int d, int w, int h)
 	     storageType,
 	     tmp);
   
-  QVariant v;
   if (m_voxelType == _UChar)
     {
       uchar a = *tmp;
@@ -784,49 +554,8 @@ MagickPlugin::rawValue(int d, int w, int h)
       float a = *(float*)tmp;
       v = QVariant((double)a);
     }
-  
 
-  int rawSize = m_rawMap.size()-1;
-  int idx = rawSize;
-  float frc = 0;
-  float val;
-
-  if (v.type() == QVariant::UInt)
-    val = v.toUInt();
-  else if (v.type() == QVariant::Int)
-    val = v.toInt();
-  else if (v.type() == QVariant::Double)
-    val = v.toDouble();
-
-  if (val <= m_rawMap[0])
-    {
-      idx = 0;
-      frc = 0;
-    }
-  else if (val >= m_rawMap[rawSize])
-    {
-      idx = rawSize-1;
-      frc = 1;
-    }
-  else
-    {
-      for(uint m=0; m<rawSize; m++)
-	{
-	  if (val >= m_rawMap[m] &&
-	      val <= m_rawMap[m+1])
-	    {
-	      idx = m;
-	      frc = ((float)val-(float)m_rawMap[m])/
-		((float)m_rawMap[m+1]-(float)m_rawMap[m]);
-	    }
-	}
-    }
-  
-  uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
-
-  pair.first = v;
-  pair.second = QVariant((uint)pv);
-  return pair;
+  return v;
 }
 
 void

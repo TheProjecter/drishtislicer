@@ -2,6 +2,16 @@
 #include "common.h"
 #include "tomplugin.h"
 
+QStringList
+TomPlugin::registerPlugin()
+{
+  QStringList regString;
+  regString << "files";
+  regString << "QMUL Tom Files";
+  
+  return regString;
+}
+
 void
 TomPlugin::init()
 {
@@ -15,11 +25,6 @@ TomPlugin::init()
   m_bytesPerVoxel = 1;
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
-
-  m_rawMap.clear();
-  m_pvlMap.clear();
-
-  m_image = 0;
 }
 
 void
@@ -35,13 +40,6 @@ TomPlugin::clear()
   m_bytesPerVoxel = 1;
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
-
-  m_rawMap.clear();
-  m_pvlMap.clear();
-
-  if (m_image)
-    delete [] m_image;
-  m_image = 0;
 }
 
 void
@@ -67,16 +65,6 @@ TomPlugin::setMinMax(float rmin, float rmax)
 float TomPlugin::rawMin() { return m_rawMin; }
 float TomPlugin::rawMax() { return m_rawMax; }
 QList<uint> TomPlugin::histogram() { return m_histogram; }
-QList<float> TomPlugin::rawMap() { return m_rawMap; }
-QList<uchar> TomPlugin::pvlMap() { return m_pvlMap; }
-
-void
-TomPlugin::setMap(QList<float> rm,
-		  QList<uchar> pm)
-{
-  m_rawMap = rm;
-  m_pvlMap = pm;
-}
 
 void
 TomPlugin::gridSize(int& d, int& w, int& h)
@@ -127,11 +115,6 @@ TomPlugin::setFile(QStringList files)
   m_rawMin = 0;
   m_rawMax = 255;
   generateHistogram();
-
-  m_rawMap.append(m_rawMin);
-  m_rawMap.append(m_rawMax);
-  m_pvlMap.append(0);
-  m_pvlMap.append(255);
 
   return true;
 }
@@ -240,243 +223,63 @@ TomPlugin::getDepthSlice(int slc,
   fin.close();
 }
 
-QImage
-TomPlugin::getDepthSliceImage(int slc)
+void
+TomPlugin::getWidthSlice(int slc,
+			 uchar *slice)
 {
-  int nX, nY, nZ;
-  nX = m_depth;
-  nY = m_width;
-  nZ = m_height;
-
-  int nbytes = nY*nZ*m_bytesPerVoxel;
-  uchar *tmp = new uchar[nbytes];
-
-  if (m_image)
-    delete [] m_image;
-  m_image = new uchar[nY*nZ];
-
-
-  QFile fin(m_fileName[0]);
-  fin.open(QFile::ReadOnly);
-  fin.seek(m_skipBytes + nbytes*slc);
-  fin.read((char*)tmp, nbytes);
-  fin.close();
-
-  int rawSize = m_rawMap.size()-1;
-  for(uint i=0; i<nY*nZ; i++)
-    {
-      int idx = m_rawMap.size()-1;
-      float frc = 0;
-      float v = ((uchar *)tmp)[i];
-
-      if (v < m_rawMap[0])
-	{
-	  idx = 0;
-	  frc = 0;
-	}
-      else if (v > m_rawMap[rawSize])
-	{
-	  idx = rawSize-1;
-	  frc = 1;
-	}
-      else
-	{
-	  for(uint m=0; m<rawSize; m++)
-	    {
-	      if (v >= m_rawMap[m] &&
-		  v <= m_rawMap[m+1])
-		{
-		  idx = m;
-		  frc = ((float)v-(float)m_rawMap[m])/
-		    ((float)m_rawMap[m+1]-(float)m_rawMap[m]);
-		}
-	    }
-	}
-
-      uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
-      m_image[i] = pv;
-    }
-  QImage img = QImage(m_image, nZ, nY, nZ, QImage::Format_Indexed8);
-
-  delete [] tmp;
-
-  return img;
-}
-
-QImage
-TomPlugin::getWidthSliceImage(int slc)
-{
-  int nX, nY, nZ;
-  nX = m_depth;
-  nY = m_width;
-  nZ = m_height;
-
-  if (slc < 0 || slc >= nY)
-    {
-      QImage img = QImage(100, 100, QImage::Format_Indexed8);
-      return img;
-    }
-
-  if (m_image)
-    delete [] m_image;
-  m_image = new uchar[nX*nZ];
-
-  int nbytes = nX*nZ*m_bytesPerVoxel;
-  uchar *tmp = new uchar[nbytes];
-
   QFile fin(m_fileName[0]);
   fin.open(QFile::ReadOnly);
 
-  for(uint k=0; k<nX; k++)
+  for(uint k=0; k<m_depth; k++)
     {
       fin.seek(m_skipBytes +
-	       (slc*nZ + k*nY*nZ)*m_bytesPerVoxel);
+	       (slc*m_height + k*m_width*m_height)*m_bytesPerVoxel);
 
-      fin.read((char*)(tmp+k*nZ*m_bytesPerVoxel),
-	       nZ*m_bytesPerVoxel);
+      fin.read((char*)(slice+k*m_height*m_bytesPerVoxel),
+	       m_height*m_bytesPerVoxel);
 
     }
   fin.close();
-
-
-  int rawSize = m_rawMap.size()-1;
-  for(uint i=0; i<nX*nZ; i++)
-    {
-      int idx = m_rawMap.size()-1;
-      float frc = 0;
-      float v = ((uchar *)tmp)[i];
-
-      if (v < m_rawMap[0])
-	{
-	  idx = 0;
-	  frc = 0;
-	}
-      else if (v > m_rawMap[rawSize])
-	{
-	  idx = rawSize-1;
-	  frc = 1;
-	}
-      else
-	{
-	  for(uint m=0; m<rawSize; m++)
-	    {
-	      if (v >= m_rawMap[m] &&
-		  v <= m_rawMap[m+1])
-		{
-		  idx = m;
-		  frc = ((float)v-(float)m_rawMap[m])/
-		    ((float)m_rawMap[m+1]-(float)m_rawMap[m]);
-		}
-	    }
-	}
-
-      uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
-      m_image[i] = pv;
-    }
-  QImage img = QImage(m_image, nZ, nX, nZ, QImage::Format_Indexed8);
-
-  delete [] tmp;
-
-  return img;
 }
 
-QImage
-TomPlugin::getHeightSliceImage(int slc)
+void
+TomPlugin::getHeightSlice(int slc,
+			  uchar *slice)
 {
-  int nX, nY, nZ;
-  nX = m_depth;
-  nY = m_width;
-  nZ = m_height;
-
-  if (slc < 0 || slc >= nZ)
-    {
-      QImage img = QImage(100, 100, QImage::Format_Indexed8);
-      return img;
-    }
-
-  if (m_image)
-    delete [] m_image;
-  m_image = new uchar[nX*nY];
-
-  int nbytes = nX*nY*m_bytesPerVoxel;
-  uchar *tmp = new uchar[nbytes];
-
   QFile fin(m_fileName[0]);
   fin.open(QFile::ReadOnly);
   fin.seek(m_skipBytes);
 
-  int ndum = nY*nZ*m_bytesPerVoxel;
+  int ndum = m_width*m_height*m_bytesPerVoxel;
   uchar *dum = new uchar[ndum];
   
   uint it=0;
-  for(uint k=0; k<nX; k++)
+  for(uint k=0; k<m_depth; k++)
     {
       fin.read((char*)dum, ndum);
-      for(uint j=0; j<nY; j++)
+      for(uint j=0; j<m_width; j++)
 	{
-	  memcpy(tmp+it*m_bytesPerVoxel,
-		 dum+(j*nZ+slc)*m_bytesPerVoxel,
+	  memcpy(slice+it*m_bytesPerVoxel,
+		 dum+(j*m_height+slc)*m_bytesPerVoxel,
 		 m_bytesPerVoxel);
 	  it++;
 	}
     }
   delete [] dum;
   fin.close();
-
-
-  int rawSize = m_rawMap.size()-1;
-  for(uint i=0; i<nX*nY; i++)
-    {
-      int idx = m_rawMap.size()-1;
-      float frc = 0;
-      float v = ((uchar *)tmp)[i];
-
-      if (v < m_rawMap[0])
-	{
-	  idx = 0;
-	  frc = 0;
-	}
-      else if (v > m_rawMap[rawSize])
-	{
-	  idx = rawSize-1;
-	  frc = 1;
-	}
-      else
-	{
-	  for(uint m=0; m<rawSize; m++)
-	    {
-	      if (v >= m_rawMap[m] &&
-		  v <= m_rawMap[m+1])
-		{
-		  idx = m;
-		  frc = ((float)v-(float)m_rawMap[m])/
-		    ((float)m_rawMap[m+1]-(float)m_rawMap[m]);
-		}
-	    }
-	}
-
-      uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
-      m_image[i] = pv;
-    }
-  QImage img = QImage(m_image, nY, nX, nY, QImage::Format_Indexed8);
-
-  delete [] tmp;
-
-  return img;
 }
 
-QPair<QVariant, QVariant>
+QVariant
 TomPlugin::rawValue(int d, int w, int h)
 {
-  QPair<QVariant, QVariant> pair;
+  QVariant v;
 
   if (d < 0 || d >= m_depth ||
       w < 0 || w >= m_width ||
       h < 0 || h >= m_height)
     {
-      pair.first = QVariant("OutOfBounds");
-      pair.second = QVariant("OutOfBounds");
-      return pair;
+      v = QVariant("OutOfBounds");
+      return v;
     }
 
   QFile fin(m_fileName[0]);
@@ -488,51 +291,17 @@ TomPlugin::rawValue(int d, int w, int h)
 
   unsigned char val;
   fin.read((char*)&val, m_bytesPerVoxel);
-  QVariant v = QVariant((uint)val);
-
+  v = QVariant((uint)val);
   fin.close();
- 
 
-  int rawSize = m_rawMap.size()-1;
-  int idx = rawSize;
-  float frc = 0;
-
-  if (val <= m_rawMap[0])
-    {
-      idx = 0;
-      frc = 0;
-    }
-  else if (val >= m_rawMap[rawSize])
-    {
-      idx = rawSize-1;
-      frc = 1;
-    }
-  else
-    {
-      for(uint m=0; m<rawSize; m++)
-	{
-	  if (val >= m_rawMap[m] &&
-	      val <= m_rawMap[m+1])
-	    {
-	      idx = m;
-	      frc = ((float)val-(float)m_rawMap[m])/
-		((float)m_rawMap[m+1]-(float)m_rawMap[m]);
-	    }
-	}
-    }
-  
-  uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
-
-  pair.first = v;
-  pair.second = QVariant((uint)pv);
-  return pair;
+  return v;
 }
 
 void
 TomPlugin::saveTrimmed(QString trimFile,
-			    int dmin, int dmax,
-			    int wmin, int wmax,
-			    int hmin, int hmax)
+		       int dmin, int dmax,
+		       int wmin, int wmax,
+		       int hmin, int hmax)
 {
   QProgressDialog progress("Saving trimmed volume",
 			   "Cancel",

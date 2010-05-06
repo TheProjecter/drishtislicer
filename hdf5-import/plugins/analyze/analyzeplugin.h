@@ -78,6 +78,8 @@ class AnalyzePlugin : public QObject, VolInterface
   Q_INTERFACES(VolInterface)
 
  public :
+  QStringList registerPlugin();
+
   void init();
   void clear();
 
@@ -96,22 +98,16 @@ class AnalyzePlugin : public QObject, VolInterface
   void setMinMax(float, float);
   float rawMin();
   float rawMax();
-   
-  void setMap(QList<float>, QList<uchar>);
-
-  QList<float> rawMap();
-  QList<uchar> pvlMap();
 
   void getDepthSlice(int, uchar*);
+  void getWidthSlice(int, uchar*);
+  void getHeightSlice(int, uchar*);
 
-  QImage getDepthSliceImage(int);
-  QImage getWidthSliceImage(int);
-  QImage getHeightSliceImage(int);
-
-  QPair<QVariant,QVariant> rawValue(int, int, int);
+  QVariant rawValue(int, int, int);
 
   void saveTrimmed(QString, int, int, int, int, int, int);
 
+  void generateHistogram();
  private :
   QStringList m_fileName;
   int m_depth, m_width, m_height;
@@ -126,11 +122,6 @@ class AnalyzePlugin : public QObject, VolInterface
   float m_rawMin, m_rawMax;
   QList<uint> m_histogram;
 
-  QList<float> m_rawMap;
-  QList<uchar> m_pvlMap;
-   
-  unsigned char *m_image;
-
   struct analyze_dsr m_analyzeHeader;
   QString m_hdrFile, m_imgFile;
   bool m_byteSwap;
@@ -139,7 +130,6 @@ class AnalyzePlugin : public QObject, VolInterface
   int m_bytesPerVoxel;
 
   void findMinMax();
-  void generateHistogram();
   void findMinMaxandGenerateHistogram();
 
   bool checkExtension(QString, const char*);

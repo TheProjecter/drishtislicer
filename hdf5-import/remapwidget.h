@@ -3,7 +3,7 @@
 
 #include "ui_remapwidget.h"
 
-#include "volinterface.h"
+#include "volumedata.h"
 
 #include "remaphistogramwidget.h"
 #include "remapimage.h"
@@ -17,8 +17,8 @@ class RemapWidget : public QWidget
  public :
   RemapWidget(QWidget *parent=NULL);
 
-  bool setFile(QList<QString> flnm,
-	       int volType);
+  bool setFile(QList<QString>,
+	       QString);
   
   enum VolumeType
   {
@@ -58,15 +58,14 @@ class RemapWidget : public QWidget
 			 int, int);
   void extractRawVolume();
 
-  void handleTimeSeries();
+  void handleTimeSeries(QString, QString);
 
  private :
   Ui::RemapWidget ui;
 
-  VolInterface *m_volInterface;
+  VolumeData m_volData;
 
   QList<QString> m_volumeFile;
-  int m_volumeType;
 
   RemapHistogramWidget *m_histogramWidget;
   RemapImage *m_imageWidget;
@@ -79,58 +78,8 @@ class RemapWidget : public QWidget
 
   int m_currSlice;
 
-  bool loadPlugin();
-
-  bool reduceGridSize(QString,
-		      int, int, int);
-
-  void applyMapping(QString, QString,
-		    int, int, int,
-		    int);
-
-  void createPVL(QString, QString, QString,
-		 int, int, int,
-		 int,
-		 float, float, float,
-		 QString);
-
   void showWidgets();
   void hideWidgets();
-
-
-  bool getVolumeInfo(QString,
-		     int&,
-		     uchar&,
-		     int&,
-		     float&, float&, float&,
-		     QString&,
-		     QList<float>&,
-		     QList<uchar>&,
-		     int&,
-		     int&,
-		     int&);
-
-  void applyMappingTimeSeries(QString,
-			      QString,
-			      int, int, int,
-			      int,
-			      int,
-			      int,
-			      QList<float>,
-			      QList<uchar>);
-
-  void createPVLTimeSeries(QString,
-			   QString,
-			   QString,
-			   int, int, int,
-			   int,
-			   float, float, float,
-			   QString,
-			   int,
-			   int,
-			   QList<float>,
-			   QList<uchar>);
-
 };
 
 #endif

@@ -10,6 +10,8 @@ class ImageStackPlugin : public QObject, VolInterface
   Q_INTERFACES(VolInterface)
 
  public :
+  QStringList registerPlugin();
+
   void init();
   void clear();
 
@@ -29,21 +31,15 @@ class ImageStackPlugin : public QObject, VolInterface
   float rawMin();
   float rawMax();
    
-  void setMap(QList<float>, QList<uchar>);
-
-  QList<float> rawMap();
-  QList<uchar> pvlMap();
-
   void getDepthSlice(int, uchar*);
+  void getWidthSlice(int, uchar*);
+  void getHeightSlice(int, uchar*);
 
-  QImage getDepthSliceImage(int);
-  QImage getWidthSliceImage(int);
-  QImage getHeightSliceImage(int);
-
-  QPair<QVariant,QVariant> rawValue(int, int, int);
+  QVariant rawValue(int, int, int);
 
   void saveTrimmed(QString, int, int, int, int, int, int);
 
+  void generateHistogram();
  private :
   QStringList m_fileName;
   int m_depth, m_width, m_height;
@@ -58,13 +54,10 @@ class ImageStackPlugin : public QObject, VolInterface
   float m_rawMin, m_rawMax;
   QList<uint> m_histogram;
 
-  QList<float> m_rawMap;
-  QList<uchar> m_pvlMap;
-   
-  unsigned char *m_image;
-
   int m_bytesPerVoxel;
   QList<QString> m_imageList;
+
+  void setImageFiles(QStringList);
 };
 
 #endif

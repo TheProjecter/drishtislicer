@@ -4,6 +4,18 @@
 #include "common.h"
 #include "hdf4plugin.h"
 
+QStringList
+HDF4Plugin::registerPlugin()
+{
+  QStringList regString;
+  regString << "directory";
+  regString << "HDF4 Directory";
+  regString << "files";
+  regString << "HDF4 Files";
+  
+  return regString;
+}
+
 void
 HDF4Plugin::init()
 {
@@ -19,11 +31,6 @@ HDF4Plugin::init()
   m_bytesPerVoxel = 1;
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
-
-  m_rawMap.clear();
-  m_pvlMap.clear();
-
-  m_image = 0;
 }
 
 void
@@ -41,13 +48,6 @@ HDF4Plugin::clear()
   m_bytesPerVoxel = 1;
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
-
-  m_rawMap.clear();
-  m_pvlMap.clear();
-
-  if (m_image)
-    delete [] m_image;
-  m_image = 0;
 }
 
 void
@@ -73,16 +73,6 @@ HDF4Plugin::setMinMax(float rmin, float rmax)
 float HDF4Plugin::rawMin() { return m_rawMin; }
 float HDF4Plugin::rawMax() { return m_rawMax; }
 QList<uint> HDF4Plugin::histogram() { return m_histogram; }
-QList<float> HDF4Plugin::rawMap() { return m_rawMap; }
-QList<uchar> HDF4Plugin::pvlMap() { return m_pvlMap; }
-
-void
-HDF4Plugin::setMap(QList<float> rm,
-		  QList<uchar> pm)
-{
-  m_rawMap = rm;
-  m_pvlMap = pm;
-}
 
 void
 HDF4Plugin::gridSize(int& d, int& w, int& h)
@@ -136,19 +126,10 @@ HDF4Plugin::replaceFile(QString flnm)
 }
 
 bool
-HDF4Plugin::setFile(QStringList files)
+HDF4Plugin::setImageFiles(QStringList hdffiles)
 {
-  m_fileName = files;
-
-  // list all hdf4 image files in the directory
-  QStringList imageNameFilter;
-  imageNameFilter << "*.hdf";
-  QStringList hdffiles= QDir(m_fileName[0]).entryList(imageNameFilter,
-						      QDir::NoSymLinks|
-						      QDir::NoDotAndDotDot|
-						      QDir::Readable|
-						      QDir::Files);
   m_imageList.clear();
+
   for(uint i=0; i<hdffiles.size(); i++)
     {
       QFileInfo fileInfo(m_fileName[0], hdffiles[i]);
@@ -198,7 +179,8 @@ HDF4Plugin::setFile(QStringList files)
 			     "Error",
 			     QString("No variables in file with rank of 2"));
     return false;
-  } else if (varNames.size() == 1)
+  }
+  else if (varNames.size() == 1)
     {
       var = varNames[0];
     }
@@ -295,10 +277,31 @@ HDF4Plugin::setFile(QStringList files)
       generateHistogram();
     }
 
-  m_rawMap.append(m_rawMin);
-  m_rawMap.append(m_rawMax);
-  m_pvlMap.append(0);
-  m_pvlMap.append(255);
+  return true;
+}
+
+bool
+HDF4Plugin::setFile(QStringList files)
+{
+  m_fileName = files;
+
+  QFileInfo f(m_fileName[0]);
+  if (f.isDir())
+    {
+      // list all hdf4 image files in the directory
+      QStringList imageNameFilter;
+      imageNameFilter << "*.hdf";
+      imageNameFilter << "*.hdf4";
+      imageNameFilter << "*.h4";
+      QStringList hdffiles= QDir(m_fileName[0]).entryList(imageNameFilter,
+							  QDir::NoSymLinks|
+							  QDir::NoDotAndDotDot|
+							  QDir::Readable|
+							  QDir::Files);
+      return setImageFiles(hdffiles);
+    }
+  else
+    return setImageFiles(files);
 
   return true;
 }
@@ -645,99 +648,12 @@ HDF4Plugin::getDepthSlice(int slc,
   status = SDend(sd_id);
 }
 
-QImage
-HDF4Plugin::getDepthSliceImage(int slc)
+void
+HDF4Plugin::getWidthSlice(int slc,
+			  uchar *slice)
 {
-  if (m_image)
-    delete [] m_image;
-  m_image = new uchar[m_width*m_height];
-
-  int nbytes = m_width*m_height*m_bytesPerVoxel;
-  uchar *tmp = new uchar[nbytes];
-
-  int32 start[2], edges[2];
-  start[0] = start[1] = 0;
-  edges[0] = m_width;
-  edges[1] = m_height;
-
-  int32 sd_id = SDstart(m_imageList[slc].toAscii().data(),
-			DFACC_READ);
-  int32 sds_id = SDselect(sd_id, m_Index);
-  int status = SDreaddata(sds_id,
-			  start, NULL, edges,
-			  (VOIDP)tmp);
-  status = SDendaccess(sds_id);
-  status = SDend(sd_id);
-
-  int rawSize = m_rawMap.size()-1;
-  for(uint i=0; i<m_width*m_height; i++)
-    {
-      int idx = m_rawMap.size()-1;
-      float frc = 0;
-      float v;
-
-      if (m_voxelType == _UChar)
-	v = ((uchar *)tmp)[i];
-      else if (m_voxelType == _Char)
-	v = ((char *)tmp)[i];
-      else if (m_voxelType == _UShort)
-	v = ((ushort *)tmp)[i];
-      else if (m_voxelType == _Short)
-	v = ((short *)tmp)[i];
-      else if (m_voxelType == _Int)
-	v = ((int *)tmp)[i];
-      else if (m_voxelType == _Float)
-	v = ((float *)tmp)[i];
-
-      if (v < m_rawMap[0])
-	{
-	  idx = 0;
-	  frc = 0;
-	}
-      else if (v > m_rawMap[rawSize])
-	{
-	  idx = rawSize-1;
-	  frc = 1;
-	}
-      else
-	{
-	  for(uint m=0; m<rawSize; m++)
-	    {
-	      if (v >= m_rawMap[m] &&
-		  v <= m_rawMap[m+1])
-		{
-		  idx = m;
-		  frc = ((float)v-(float)m_rawMap[m])/
-		    ((float)m_rawMap[m+1]-(float)m_rawMap[m]);
-		}
-	    }
-	}
-
-      uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
-      m_image[i] = pv;
-    }
-  QImage img = QImage(m_image,
-		      m_height,
-		      m_width,
-		      m_height,
-		      QImage::Format_Indexed8);
-
-  delete [] tmp;
-
-  return img;
-}
-
-QImage
-HDF4Plugin::getWidthSliceImage(int slc)
-{
-  if (m_image)
-    delete [] m_image;
-
-  m_image = new uchar[m_depth*m_height];
-
   int nbytes = m_depth*m_height*m_bytesPerVoxel;
 
-  uchar *tmp = new uchar[nbytes];
   uchar *hdftmp = new uchar[m_height*m_bytesPerVoxel];
 
   int32 start[2], edges[2];
@@ -758,74 +674,16 @@ HDF4Plugin::getWidthSliceImage(int slc)
       status = SDend(sd_id);
 
       for(uint j=0; j<m_height; j++)
-	tmp[i*m_height+j] = hdftmp[j];
+	slice[i*m_height+j] = hdftmp[j];
     }
-
-  int rawSize = m_rawMap.size()-1;
-  for(uint i=0; i<m_depth*m_height; i++)
-    {
-      int idx = m_rawMap.size()-1;
-      float frc = 0;
-      float v;
-
-      if (m_voxelType == _UChar)
-	v = ((uchar *)tmp)[i];
-      else if (m_voxelType == _Char)
-	v = ((char *)tmp)[i];
-      else if (m_voxelType == _UShort)
-	v = ((ushort *)tmp)[i];
-      else if (m_voxelType == _Short)
-	v = ((short *)tmp)[i];
-      else if (m_voxelType == _Int)
-	v = ((int *)tmp)[i];
-      else if (m_voxelType == _Float)
-	v = ((float *)tmp)[i];
-
-      if (v < m_rawMap[0])
-	{
-	  idx = 0;
-	  frc = 0;
-	}
-      else if (v > m_rawMap[rawSize])
-	{
-	  idx = rawSize-1;
-	  frc = 1;
-	}
-      else
-	{
-	  for(uint m=0; m<rawSize; m++)
-	    {
-	      if (v >= m_rawMap[m] &&
-		  v <= m_rawMap[m+1])
-		{
-		  idx = m;
-		  frc = ((float)v-(float)m_rawMap[m])/
-		    ((float)m_rawMap[m+1]-(float)m_rawMap[m]);
-		}
-	    }
-	}
-
-      uchar pv = ((idx+1) < m_pvlMap.size()) ? m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]) : m_pvlMap[idx];
-      m_image[i] = pv;
-    }
-  QImage img = QImage(m_image, m_height, m_depth, m_height, QImage::Format_Indexed8);
-
-  delete [] tmp;
-
-  return img;
 }
 
-QImage
-HDF4Plugin::getHeightSliceImage(int slc)
+void
+HDF4Plugin::getHeightSlice(int slc,
+			   uchar *slice)
 {
-  if (m_image)
-    delete [] m_image;
-
-  m_image = new uchar[m_depth*m_width];
-
   int nbytes = m_depth*m_width*m_bytesPerVoxel;
 
-  uchar *tmp = new uchar[nbytes];
   uchar *hdftmp = new uchar[m_width*m_bytesPerVoxel];
 
   int32 start[2], edges[2];
@@ -845,77 +703,22 @@ HDF4Plugin::getHeightSliceImage(int slc)
       status = SDendaccess(sds_id);
       status = SDend(sd_id);
 
-
       for(uint j=0; j<m_width; j++)
-	tmp[i*m_width+j] = hdftmp[j];
+	slice[i*m_width+j] = hdftmp[j];
     }
-
-  int rawSize = m_rawMap.size()-1;
-  for(uint i=0; i<m_depth*m_width; i++)
-    {
-      int idx = m_rawMap.size()-1;
-      float frc = 0;
-      float v;
-
-      if (m_voxelType == _UChar)
-	v = ((uchar *)tmp)[i];
-      else if (m_voxelType == _Char)
-	v = ((char *)tmp)[i];
-      else if (m_voxelType == _UShort)
-	v = ((ushort *)tmp)[i];
-      else if (m_voxelType == _Short)
-	v = ((short *)tmp)[i];
-      else if (m_voxelType == _Int)
-	v = ((int *)tmp)[i];
-      else if (m_voxelType == _Float)
-	v = ((float *)tmp)[i];
-
-      if (v < m_rawMap[0])
-	{
-	  idx = 0;
-	  frc = 0;
-	}
-      else if (v > m_rawMap[rawSize])
-	{
-	  idx = rawSize-1;
-	  frc = 1;
-	}
-      else
-	{
-	  for(uint m=0; m<rawSize; m++)
-	    {
-	      if (v >= m_rawMap[m] &&
-		  v <= m_rawMap[m+1])
-		{
-		  idx = m;
-		  frc = ((float)v-(float)m_rawMap[m])/
-		    ((float)m_rawMap[m+1]-(float)m_rawMap[m]);
-		}
-	    }
-	}
-
-      uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
-      m_image[i] = pv;
-    }
-  QImage img = QImage(m_image, m_width, m_depth, m_width, QImage::Format_Indexed8);
-
-  delete [] tmp;
-
-  return img;
 }
 
-QPair<QVariant, QVariant>
+QVariant
 HDF4Plugin::rawValue(int d, int w, int h)
 {
-  QPair<QVariant, QVariant> pair;
+  QVariant v;
 
   if (d < 0 || d >= m_depth ||
       w < 0 || w >= m_width ||
       h < 0 || h >= m_height)
     {
-      pair.first = QVariant("OutOfBounds");
-      pair.second = QVariant("OutOfBounds");
-      return pair;
+      v = QVariant("OutOfBounds");
+      return v;
     }
 
   uchar *hdftmp = new uchar[m_bytesPerVoxel];
@@ -936,9 +739,6 @@ HDF4Plugin::rawValue(int d, int w, int h)
 
   status = SDendaccess(sds_id);
   status = SDend(sd_id);
-
-
-  QVariant v;
 
   if (m_voxelType == _UChar)
     {
@@ -977,48 +777,7 @@ HDF4Plugin::rawValue(int d, int w, int h)
       v = QVariant((double)a);
     }
 
-  int rawSize = m_rawMap.size()-1;
-  int idx = rawSize;
-  float frc = 0;
-  float val;
-
-  if (v.type() == QVariant::UInt)
-    val = v.toUInt();
-  else if (v.type() == QVariant::Int)
-    val = v.toInt();
-  else if (v.type() == QVariant::Double)
-    val = v.toDouble();
-
-
-  if (val <= m_rawMap[0])
-    {
-      idx = 0;
-      frc = 0;
-    }
-  else if (val >= m_rawMap[rawSize])
-    {
-      idx = rawSize-1;
-      frc = 1;
-    }
-  else
-    {
-      for(uint m=0; m<rawSize; m++)
-	{
-	  if (val >= m_rawMap[m] &&
-	      val <= m_rawMap[m+1])
-	    {
-	      idx = m;
-	      frc = ((float)val-(float)m_rawMap[m])/
-		((float)m_rawMap[m+1]-(float)m_rawMap[m]);
-	    }
-	}
-    }
-  
-  uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
-
-  pair.first = v;
-  pair.second = QVariant((uint)pv);
-  return pair;
+  return v;
 }
 
 void

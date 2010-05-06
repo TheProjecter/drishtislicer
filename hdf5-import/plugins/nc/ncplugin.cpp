@@ -3,6 +3,18 @@
 #include "common.h"
 #include "ncplugin.h"
 
+QStringList
+NcPlugin::registerPlugin()
+{
+  QStringList regString;
+  regString << "directory";
+  regString << "NetCDF Directory";
+  regString << "files";
+  regString << "NetCDF Files";
+  
+  return regString;
+}
+
 void
 NcPlugin::init()
 {
@@ -18,11 +30,6 @@ NcPlugin::init()
   m_bytesPerVoxel = 1;
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
-
-  m_rawMap.clear();
-  m_pvlMap.clear();
-
-  m_image = 0;
 }
 
 void
@@ -38,13 +45,6 @@ NcPlugin::clear()
   m_bytesPerVoxel = 1;
   m_rawMin = m_rawMax = 0;
   m_histogram.clear();
-
-  m_rawMap.clear();
-  m_pvlMap.clear();
-
-  if (m_image)
-    delete [] m_image;
-  m_image = 0;
 }
 
 void
@@ -70,16 +70,6 @@ NcPlugin::setMinMax(float rmin, float rmax)
 float NcPlugin::rawMin() { return m_rawMin; }
 float NcPlugin::rawMax() { return m_rawMax; }
 QList<uint> NcPlugin::histogram() { return m_histogram; }
-QList<float> NcPlugin::rawMap() { return m_rawMap; }
-QList<uchar> NcPlugin::pvlMap() { return m_pvlMap; }
-
-void
-NcPlugin::setMap(QList<float> rm,
-		  QList<uchar> pm)
-{
-  m_rawMap = rm;
-  m_pvlMap = pm;
-}
 
 void
 NcPlugin::gridSize(int& d, int& w, int& h)
@@ -102,7 +92,8 @@ NcPlugin::listAllVariables()
   if (!dataFile.is_valid())
     {
       QMessageBox::information(0, "Error",
-			       QString("%1 is not a valid NetCDF file").arg(m_fileName[0]));
+			       QString("%1 is not a valid NetCDF file").\
+			       arg(m_fileName[0]));
       return varNames; // empty
     }
 
@@ -135,7 +126,35 @@ NcPlugin::replaceFile(QString flnm)
 bool
 NcPlugin::setFile(QStringList files)
 {
-  m_fileName = files;
+  if (files.size() == 0)
+    return false;
+
+  QFileInfo f(files[0]);
+  if (f.isDir())
+    {
+      // list all image files in the directory
+      QStringList imageNameFilter;
+      imageNameFilter << "*.nc";
+      QStringList ncfiles= QDir(files[0]).entryList(imageNameFilter,
+						    QDir::NoSymLinks|
+						    QDir::NoDotAndDotDot|
+						    QDir::Readable|
+						    QDir::Files);
+
+      if (ncfiles.size() == 0)
+	return false;
+      
+      m_fileName.clear();
+      for(uint i=0; i<ncfiles.size(); i++)
+	{
+	  QFileInfo fileInfo(files[0], ncfiles[i]);
+	  QString ncfl = fileInfo.absoluteFilePath();
+	  m_fileName << ncfl;
+	}
+    }
+  else
+    m_fileName = files;
+
 
   QList<QString> varNames;
   QList<QString> allVars = listAllVariables();
@@ -271,12 +290,6 @@ NcPlugin::setFile(QStringList files)
       findMinMax();
       generateHistogram();
     }
-
-  m_rawMap.append(m_rawMin);
-  m_rawMap.append(m_rawMax);
-  m_pvlMap.append(0);
-  m_pvlMap.append(255);
-
 
   return true;
 }
@@ -679,132 +692,10 @@ NcPlugin::getDepthSlice(int slc,
   dataFile.close();
 }
 
-QImage
-NcPlugin::getDepthSliceImage(int slc)
+void
+NcPlugin::getWidthSlice(int slc,
+			uchar *slice)
 {
-  int nX, nY, nZ;
-  nX = m_depth;
-  nY = m_width;
-  nZ = m_height;
-
-  int nbytes = nY*nZ*m_bytesPerVoxel;
-  uchar *tmp = new uchar[nbytes];
-
-  if (m_image)
-    delete [] m_image;
-
-  m_image = new uchar[nY*nZ];
-
-
-  NcError err(NcError::verbose_nonfatal);
-
-  int nf = 0;
-  int slcno = slc;
-  for(uint fl=0; fl<m_fileName.size(); fl++)
-    {
-      if (m_depthList[fl] > slc)
-	{
-	  nf = fl;
-	  if (fl == 0)
-	    slcno = slc;
-	  else
-	    slcno = slc-m_depthList[fl-1];
-	  break;
-	}
-    }
-
-  NcFile dataFile((char *)m_fileName[nf].toAscii().data(),
-		  NcFile::ReadOnly);
-  NcVar *ncvar;
-  ncvar = dataFile.get_var((char *)m_varName.toAscii().data());
-  ncvar->set_cur(slcno, 0, 0);
-  if (ncvar->type() == ncByte || ncvar->type() == ncChar)
-    ncvar->get((ncbyte*)tmp, 1, m_width, m_height);
-  else if (ncvar->type() == ncShort)
-    ncvar->get((short*)tmp, 1, m_width, m_height);
-  else if (ncvar->type() == ncInt)
-    ncvar->get((int*)tmp, 1, m_width, m_height);
-  else if (ncvar->type() == ncFloat)
-    ncvar->get((float*)tmp, 1, m_width, m_height);
-  else if (ncvar->type() == ncDouble)
-    ncvar->get((double*)tmp, 1, m_width, m_height);
-  dataFile.close();
-
-  int rawSize = m_rawMap.size()-1;
-  for(uint i=0; i<nY*nZ; i++)
-    {
-      int idx = m_rawMap.size()-1;
-      float frc = 0;
-      float v;
-
-      if (m_voxelType == _UChar)
-	v = ((uchar *)tmp)[i];
-      else if (m_voxelType == _Char)
-	v = ((char *)tmp)[i];
-      else if (m_voxelType == _UShort)
-	v = ((ushort *)tmp)[i];
-      else if (m_voxelType == _Short)
-	v = ((short *)tmp)[i];
-      else if (m_voxelType == _Int)
-	v = ((int *)tmp)[i];
-      else if (m_voxelType == _Float)
-	v = ((float *)tmp)[i];
-
-      if (v < m_rawMap[0])
-	{
-	  idx = 0;
-	  frc = 0;
-	}
-      else if (v > m_rawMap[rawSize])
-	{
-	  idx = rawSize-1;
-	  frc = 1;
-	}
-      else
-	{
-	  for(uint m=0; m<rawSize; m++)
-	    {
-	      if (v >= m_rawMap[m] &&
-		  v <= m_rawMap[m+1])
-		{
-		  idx = m;
-		  frc = ((float)v-(float)m_rawMap[m])/
-		    ((float)m_rawMap[m+1]-(float)m_rawMap[m]);
-		}
-	    }
-	}
-
-      uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
-      m_image[i] = pv;
-    }
-  QImage img = QImage(m_image, nZ, nY, nZ, QImage::Format_Indexed8);
-
-  delete [] tmp;
-
-  return img;
-}
-
-QImage
-NcPlugin::getWidthSliceImage(int slc)
-{
-  int nX, nY, nZ;
-  nX = m_depth;
-  nY = m_width;
-  nZ = m_height;
-
-  if (slc < 0 || slc >= nY)
-    {
-      QImage img = QImage(100, 100, QImage::Format_Indexed8);
-      return img;
-    }
-
-  if (m_image)
-    delete [] m_image;
-  m_image = new uchar[nX*nZ];
-
-  int nbytes = nX*nZ*m_bytesPerVoxel;
-  uchar *tmp = new uchar[nbytes];
-
   NcError err(NcError::verbose_nonfatal);
 
   for(uint nf=0; nf<m_fileName.size(); nf++)
@@ -820,14 +711,13 @@ NcPlugin::getWidthSliceImage(int slc)
       if (nf > 0)
 	{
 	  depth = m_depthList[nf]-m_depthList[nf-1];
-	  ptmp = tmp + m_depthList[nf-1]*nZ*m_bytesPerVoxel;
+	  ptmp = slice + m_depthList[nf-1]*m_height*m_bytesPerVoxel;
 	}
       else
 	{
 	  depth = m_depthList[0];
-	  ptmp = tmp;
+	  ptmp = slice;
 	}
-
 
       if (ncvar->type() == ncByte || ncvar->type() == ncChar)
 	ncvar->get((ncbyte*)ptmp, depth, 1, m_height);
@@ -840,84 +730,13 @@ NcPlugin::getWidthSliceImage(int slc)
       else if (ncvar->type() == ncDouble)
 	ncvar->get((double*)ptmp, depth, 1, m_height);
       dataFile.close();
-    }
-  
-  int rawSize = m_rawMap.size()-1;
-  for(uint i=0; i<nX*nZ; i++)
-    {
-      int idx = m_rawMap.size()-1;
-      float frc = 0;
-      float v;
-      
-      if (m_voxelType == _UChar)
-	v = ((uchar *)tmp)[i];
-      else if (m_voxelType == _Char)
-	v = ((char *)tmp)[i];
-      else if (m_voxelType == _UShort)
-	v = ((ushort *)tmp)[i];
-      else if (m_voxelType == _Short)
-	v = ((short *)tmp)[i];
-      else if (m_voxelType == _Int)
-	v = ((int *)tmp)[i];
-      else if (m_voxelType == _Float)
-	v = ((float *)tmp)[i];
-      
-      if (v < m_rawMap[0])
-	{
-	  idx = 0;
-	  frc = 0;
-	}
-      else if (v > m_rawMap[rawSize])
-	{
-	  idx = rawSize-1;
-	  frc = 1;
-	}
-      else
-	{
-	  for(uint m=0; m<rawSize; m++)
-	    {
-	      if (v >= m_rawMap[m] &&
-		  v <= m_rawMap[m+1])
-		{
-		  idx = m;
-		  frc = ((float)v-(float)m_rawMap[m])/
-		    ((float)m_rawMap[m+1]-(float)m_rawMap[m]);
-		}
-	    }
-	}
-      
-      uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
-      m_image[i] = pv;
-    }
-  
-  QImage img = QImage(m_image, nZ, nX, nZ, QImage::Format_Indexed8);
-
-  delete [] tmp;
-
-  return img;
+    }  
 }
 
-QImage
-NcPlugin::getHeightSliceImage(int slc)
+void
+NcPlugin::getHeightSlice(int slc,
+			 uchar *slice)
 {
-  int nX, nY, nZ;
-  nX = m_depth;
-  nY = m_width;
-  nZ = m_height;
-
-  if (slc < 0 || slc >= nZ)
-    {
-      QImage img = QImage(100, 100, QImage::Format_Indexed8);
-      return img;
-    }
-
-  if (m_image)
-    delete [] m_image;
-  m_image = new uchar[nX*nY];
-
-  int nbytes = nX*nY*m_bytesPerVoxel;
-  uchar *tmp = new uchar[nbytes];
-
   NcError err(NcError::verbose_nonfatal);
 
   for(uint nf=0; nf < m_fileName.size(); nf++)
@@ -933,12 +752,12 @@ NcPlugin::getHeightSliceImage(int slc)
       if (nf > 0)
 	{
 	  depth = m_depthList[nf]-m_depthList[nf-1];
-	  ptmp = tmp + m_depthList[nf-1]*nY*m_bytesPerVoxel;
+	  ptmp = slice + m_depthList[nf-1]*m_width*m_bytesPerVoxel;
 	}
       else
 	{
 	  depth = m_depthList[0];
-	  ptmp = tmp;
+	  ptmp = slice;
 	}
 
       if (ncvar->type() == ncByte || ncvar->type() == ncChar)
@@ -953,73 +772,19 @@ NcPlugin::getHeightSliceImage(int slc)
 	ncvar->get((double*)ptmp, depth, m_width, 1);
       dataFile.close();
     }
-
-  int rawSize = m_rawMap.size()-1;
-  for(uint i=0; i<nX*nY; i++)
-    {
-      int idx = m_rawMap.size()-1;
-      float frc = 0;
-      float v;
-
-      if (m_voxelType == _UChar)
-	v = ((uchar *)tmp)[i];
-      else if (m_voxelType == _Char)
-	v = ((char *)tmp)[i];
-      else if (m_voxelType == _UShort)
-	v = ((ushort *)tmp)[i];
-      else if (m_voxelType == _Short)
-	v = ((short *)tmp)[i];
-      else if (m_voxelType == _Int)
-	v = ((int *)tmp)[i];
-      else if (m_voxelType == _Float)
-	v = ((float *)tmp)[i];
-
-      if (v < m_rawMap[0])
-	{
-	  idx = 0;
-	  frc = 0;
-	}
-      else if (v > m_rawMap[rawSize])
-	{
-	  idx = rawSize-1;
-	  frc = 1;
-	}
-      else
-	{
-	  for(uint m=0; m<rawSize; m++)
-	    {
-	      if (v >= m_rawMap[m] &&
-		  v <= m_rawMap[m+1])
-		{
-		  idx = m;
-		  frc = ((float)v-(float)m_rawMap[m])/
-		    ((float)m_rawMap[m+1]-(float)m_rawMap[m]);
-		}
-	    }
-	}
-
-      uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
-      m_image[i] = pv;
-    }
-  QImage img = QImage(m_image, nY, nX, nY, QImage::Format_Indexed8);
-
-  delete [] tmp;
-
-  return img;
 }
 
-QPair<QVariant, QVariant>
+QVariant
 NcPlugin::rawValue(int d, int w, int h)
 {
-  QPair<QVariant, QVariant> pair;
+  QVariant v;
 
   if (d < 0 || d >= m_depth ||
       w < 0 || w >= m_width ||
       h < 0 || h >= m_height)
     {
-      pair.first = QVariant("OutOfBounds");
-      pair.second = QVariant("OutOfBounds");
-      return pair;
+      v = QVariant("OutOfBounds");
+      return v;
     }
 
 
@@ -1047,8 +812,6 @@ NcPlugin::rawValue(int d, int w, int h)
   NcVar *ncvar;
   ncvar = dataFile.get_var((char *)m_varName.toAscii().data());
   ncvar->set_cur(slcno, w, h);
-
-  QVariant v;
 
   if (m_voxelType == _UChar)
     {
@@ -1087,49 +850,8 @@ NcPlugin::rawValue(int d, int w, int h)
       v = QVariant((double)a);
     }
   dataFile.close();
- 
 
-  int rawSize = m_rawMap.size()-1;
-  int idx = rawSize;
-  float frc = 0;
-  float val;
-
-  if (v.type() == QVariant::UInt)
-    val = v.toUInt();
-  else if (v.type() == QVariant::Int)
-    val = v.toInt();
-  else if (v.type() == QVariant::Double)
-    val = v.toDouble();
-
-  if (val <= m_rawMap[0])
-    {
-      idx = 0;
-      frc = 0;
-    }
-  else if (val >= m_rawMap[rawSize])
-    {
-      idx = rawSize-1;
-      frc = 1;
-    }
-  else
-    {
-      for(uint m=0; m<rawSize; m++)
-	{
-	  if (val >= m_rawMap[m] &&
-	      val <= m_rawMap[m+1])
-	    {
-	      idx = m;
-	      frc = ((float)val-(float)m_rawMap[m])/
-		((float)m_rawMap[m+1]-(float)m_rawMap[m]);
-	    }
-	}
-    }
-  
-  uchar pv = m_pvlMap[idx] + frc*(m_pvlMap[idx+1]-m_pvlMap[idx]);
-
-  pair.first = v;
-  pair.second = QVariant((uint)pv);
-  return pair;
+  return v;
 }
 
 void
