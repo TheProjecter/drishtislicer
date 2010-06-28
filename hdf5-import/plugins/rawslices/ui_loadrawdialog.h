@@ -1,10 +1,10 @@
 /********************************************************************************
-** Form generated from reading UI file 'loadrawdialog.ui'
+** Form generated from reading ui file 'loadrawdialog.ui'
 **
-** Created: Fri 23. Apr 14:46:58 2010
-**      by: Qt User Interface Compiler version 4.6.2
+** Created: Mon Jun 28 10:40:34 2010
+**      by: Qt User Interface Compiler version 4.5.2
 **
-** WARNING! All changes made in this file will be lost when recompiling UI file!
+** WARNING! All changes made in this file will be lost when recompiling ui file!
 ********************************************************************************/
 
 #ifndef UI_LOADRAWDIALOG_H
@@ -145,6 +145,7 @@ public:
         label_2->setText(QApplication::translate("LoadRawDialog", "Grid Size", 0, QApplication::UnicodeUTF8));
         gridSize->setText(QString());
         label_3->setText(QApplication::translate("LoadRawDialog", "Skip Header Bytes", 0, QApplication::UnicodeUTF8));
+        Q_UNUSED(LoadRawDialog);
     } // retranslateUi
 
 };

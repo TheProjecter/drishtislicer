@@ -1,10 +1,10 @@
 /********************************************************************************
-** Form generated from reading UI file 'savepvldialog.ui'
+** Form generated from reading ui file 'savepvldialog.ui'
 **
-** Created: Mon 11. Jan 15:53:13 2010
-**      by: Qt User Interface Compiler version 4.6.0
+** Created: Mon Jun 28 10:40:15 2010
+**      by: Qt User Interface Compiler version 4.5.2
 **
-** WARNING! All changes made in this file will be lost when recompiling UI file!
+** WARNING! All changes made in this file will be lost when recompiling ui file!
 ********************************************************************************/
 
 #ifndef UI_SAVEPVLDIALOG_H
@@ -156,6 +156,7 @@ public:
          << QApplication::translate("SavePvlDialog", "9x9", 0, QApplication::UnicodeUTF8)
          << QApplication::translate("SavePvlDialog", "11x11", 0, QApplication::UnicodeUTF8)
         );
+        Q_UNUSED(SavePvlDialog);
     } // retranslateUi
 
 };

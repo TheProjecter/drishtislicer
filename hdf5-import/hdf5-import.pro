@@ -54,7 +54,8 @@ LIBS += -lnetcdf_c++ \
         -lMagickWand \
         -lMagickCore \
         -ljpeg \
-        -lz
+        -lz \
+	-lhdf5_cpp
 
 DEFINES += DRISHTIIMPORT_VERSION="\\\"$${VERSION}\\\""
 DEFINES += DRISHTIIMPORT_DOCDIR="\\\"$${INSTALLDOCDIR}\\\""

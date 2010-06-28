@@ -1,10 +1,10 @@
 /********************************************************************************
-** Form generated from reading UI file 'remapwidget.ui'
+** Form generated from reading ui file 'remapwidget.ui'
 **
-** Created: Thu 4. Feb 16:05:12 2010
-**      by: Qt User Interface Compiler version 4.6.0
+** Created: Mon Jun 28 10:40:15 2010
+**      by: Qt User Interface Compiler version 4.5.2
 **
-** WARNING! All changes made in this file will be lost when recompiling UI file!
+** WARNING! All changes made in this file will be lost when recompiling ui file!
 ********************************************************************************/
 
 #ifndef UI_REMAPWIDGET_H
@@ -152,6 +152,7 @@ public:
         butZ->setText(QApplication::translate("RemapWidget", "Z", 0, QApplication::UnicodeUTF8));
         butY->setText(QApplication::translate("RemapWidget", "Y", 0, QApplication::UnicodeUTF8));
         butX->setText(QApplication::translate("RemapWidget", "X", 0, QApplication::UnicodeUTF8));
+        Q_UNUSED(RemapWidget);
     } // retranslateUi
 
 };

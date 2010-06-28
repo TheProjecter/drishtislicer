@@ -1,10 +1,10 @@
 /********************************************************************************
-** Form generated from reading UI file 'fileslistdialog.ui'
+** Form generated from reading ui file 'fileslistdialog.ui'
 **
-** Created: Mon 11. Jan 15:53:13 2010
-**      by: Qt User Interface Compiler version 4.6.0
+** Created: Mon Jun 28 10:40:15 2010
+**      by: Qt User Interface Compiler version 4.5.2
 **
-** WARNING! All changes made in this file will be lost when recompiling UI file!
+** WARNING! All changes made in this file will be lost when recompiling ui file!
 ********************************************************************************/
 
 #ifndef UI_FILESLISTDIALOG_H
@@ -61,6 +61,7 @@ public:
     void retranslateUi(QDialog *FilesListDialog)
     {
         FilesListDialog->setWindowTitle(QApplication::translate("FilesListDialog", "Loading Files", 0, QApplication::UnicodeUTF8));
+        Q_UNUSED(FilesListDialog);
     } // retranslateUi
 
 };
