@@ -43,7 +43,15 @@ DrishtiImport::registerPlugins()
   QDir dir(plugindir);
   dir.setFilter(QDir::Files);
   QStringList filters;
+
+#if defined(Q_OS_WIN32)
   filters << "*.dll";
+#elif defined(Q_OS_MAC)
+  filters << "*.dylib";
+#elif defined(Q_OS_LINIX)
+  filters << "*.so";
+#endif
+
   dir.setNameFilters(filters);
   QFileInfoList list = dir.entryInfoList();
 

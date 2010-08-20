@@ -56,10 +56,7 @@ unix {
 !macx {
 
 INCLUDEPATH += . \
-	../../3rdParty/include \
-        ../../3rdParty/include/ImageMagick
-
-LIBPATH += ../../3rdParty/lib
+  /usr/include/ImageMagick
 
 LIBS += -lnetcdf_c++ \
         -lnetcdf \
@@ -69,7 +66,8 @@ LIBS += -lnetcdf_c++ \
         -lMagickWand \
         -lMagickCore \
         -ljpeg \
-        -lz
+        -lz \
+        -lhdf5_cpp
 
 DEFINES += DRISHTIIMPORT_VERSION="\\\"$${VERSION}\\\""
 DEFINES += DRISHTIIMPORT_DOCDIR="\\\"$${INSTALLDOCDIR}\\\""

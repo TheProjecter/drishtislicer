@@ -1,0 +1,25 @@
+
+Required packages for compiling:
+
+g++
+make
+
+libqt4-dev
+qt4-dev-tools
+
+libmagick++-dev
+libmagickwand-dev
+
+libnetcdf-dev
+libhdf4g-dev
+libhdf5-serial-dev
+
+To compile:
+
+> cd <path>/drishtislicer
+> qmake
+> make
+
+Binaries will be placed into the bin sub-directory. They can be 
+moved to another location but the plugin (and files therein) must
+be moved with the hdf5-import binary.
