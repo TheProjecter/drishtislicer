@@ -22,21 +22,24 @@
      <x>0</x>
      <y>0</y>
      <width>554</width>
-     <height>25</height>
+     <height>24</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFiles">
     <property name="title">
      <string>Files</string>
     </property>
-    <addaction name="saveImage"/>
+    <addaction name="actionLoad_File"/>
+    <addaction name="separator"/>
+    <addaction name="actionSave_Image"/>
     <addaction name="actionSave_Images"/>
+    <addaction name="separator"/>
     <addaction name="actionExit"/>
    </widget>
    <addaction name="menuFiles"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
-  <action name="saveImage">
+  <action name="actionSave_Image">
    <property name="text">
     <string>Save Image (Alt+S)</string>
    </property>
@@ -49,6 +52,11 @@
   <action name="actionExit">
    <property name="text">
     <string>Exit</string>
+   </property>
+  </action>
+  <action name="actionLoad_File">
+   <property name="text">
+    <string>Load File</string>
    </property>
   </action>
  </widget>

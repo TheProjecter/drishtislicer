@@ -19,10 +19,10 @@ class DrishtiSlicer : public QMainWindow
   void closeEvent(QCloseEvent *event);
   
  private slots :
-  void on_actionBVF_triggered();
+  void on_actionLoad_File_triggered();
   void on_actionSave_Images_triggered();
   void on_actionExit_triggered();
-  void on_saveImage_triggered();
+  void on_actionSave_Image_triggered();
 
  private :
   Ui::DrishtiSlicer ui;

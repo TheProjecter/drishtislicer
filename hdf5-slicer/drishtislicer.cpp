@@ -89,7 +89,7 @@ DrishtiSlicer::saveSettings()
 }
 
 void
-DrishtiSlicer::on_actionBVF_triggered()
+DrishtiSlicer::on_actionLoad_File_triggered()
 {
   QString flnm;
   flnm = QFileDialog::getOpenFileName(0,
@@ -186,7 +186,7 @@ DrishtiSlicer::on_actionSave_Images_triggered()
   m_remapWidget->saveImages();
 }
 void
-DrishtiSlicer::on_saveImage_triggered()
+DrishtiSlicer::on_actionSave_Image_triggered()
 {
   m_remapWidget->saveImage();
 }
