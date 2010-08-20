@@ -8,6 +8,7 @@ BlockFileWriter::BlockFileWriter()
   m_dumpSlice = false;
   m_slice = 0;
   m_sliceAcc = 0;
+  m_minmaxvals = 0;
 
   m_maxFileSize = 1024*1024*1024;
   m_blockSize = 32;
@@ -45,6 +46,9 @@ BlockFileWriter::reset()
     delete [] m_sliceAcc;
   m_sliceAcc = 0;
 
+  if (m_minmaxvals)
+    delete [] m_minmaxvals;
+  m_minmaxvals = 0;
 }
 
 QString BlockFileWriter::baseFilename() { return m_baseFilename; }
@@ -123,6 +127,19 @@ BlockFileWriter::createFile(bool writeHeader)
   m_ssh = m_height/m_sslevel+ (m_height%m_sslevel > 0);
   m_ssvol = new uchar[m_ssd*m_ssw*m_ssh*m_bytesPerVoxel];
   memset(m_ssvol, 0, m_ssd*m_ssw*m_ssh*m_bytesPerVoxel);
+
+  m_minmaxvals = new uchar[2*m_dblocks*m_wblocks*m_hblocks];
+  memset(m_minmaxvals, 0, 2*m_dblocks*m_wblocks*m_hblocks);
+
+  int midx = 0;
+  for(int d=0; d<m_dblocks; d++)
+    for(int w=0; w<m_wblocks; w++)
+      for(int h=0; h<m_hblocks; h++)
+	{
+	  m_minmaxvals[midx + 0] = 255;
+	  m_minmaxvals[midx + 1] = 0;
+	  midx++;
+	}
 }
 
 void
@@ -196,6 +213,8 @@ BlockFileWriter::startAddSlice()
 //  if (m_voxelType != _Rgb && m_voxelType != _Rgba)
 //    m_dataType.setOrder( H5T_ORDER_LE );
 
+  hsize_t dimsf[3];              // dataset dimensions
+
   for(int ib=0; ib<=m_minLevel; ib++)
     {
       hsize_t bdim[3];              // block dimensions
@@ -203,7 +222,6 @@ BlockFileWriter::startAddSlice()
       bdim[1] = bdim[0];
       bdim[2] = bdim[0];
       
-      hsize_t dimsf[3];              // dataset dimensions
       dimsf[0] = m_dblocks*bdim[0];
       dimsf[1] = m_wblocks*bdim[1];
       dimsf[2] = m_hblocks*bdim[2];
@@ -220,27 +238,49 @@ BlockFileWriter::startAddSlice()
 						     cparms );  
     }
 
+  {
+    dimsf[0] = 2*m_dblocks*m_wblocks*m_hblocks;
+    DataSpace dataspace(1, dimsf);
+    m_minmaxdata = m_hdf5file->createDataSet( "minmax",
+					      m_dataType,
+					      dataspace);
+  }
 
-  hsize_t dimsf[3];              // dataset dimensions
-  dimsf[0] = m_ssd;
-  dimsf[1] = m_ssw;
-  dimsf[2] = m_ssh;
-  DataSpace dataspace(3, dimsf);
+  {
+    dimsf[0] = m_ssd;
+    dimsf[1] = m_ssw;
+    dimsf[2] = m_ssh;
+    DataSpace dataspace(3, dimsf);
 
-  m_lowres = m_hdf5file->createDataSet( "lowres",
-					m_dataType,
-					dataspace);
+    m_lowres = m_hdf5file->createDataSet( "lowres",
+					  m_dataType,
+					  dataspace);
+
+    dimsf[0] = 3;
+    DataSpace gridspace(1, dimsf);
+    Attribute attrib = m_hdf5dataset[0].createAttribute("gridsize",
+							PredType::NATIVE_INT,
+							gridspace); 
+    int griddim[3];
+    griddim[0] = m_depth;
+    griddim[1] = m_width;
+    griddim[2] = m_height;
+    attrib.write(PredType::NATIVE_INT, griddim);
+  }
 }
 
 void
 BlockFileWriter::endAddSlice()
 {
-  genSliceBlocks();
-  dumpSliceBlocks(0, m_depth-1);
-  for(int ib=1; ib<=m_minLevel; ib++)
+  if (m_depth-1 < m_blockSize-1)
     {
-      genSliceBlocks(ib);
-      dumpSliceBlocks(ib, m_depth-1);
+      genZeroLevelSliceBlocks(m_depth-1);
+      dumpSliceBlocks(0, m_depth-1);
+      for(int ib=1; ib<=m_minLevel; ib++)
+	{
+	  genSliceBlocks(ib);
+	  dumpSliceBlocks(ib, m_depth-1);
+	}
     }
 
   m_hdf5file->close();
@@ -269,6 +309,19 @@ BlockFileWriter::saveDict()
 					      PredType::NATIVE_UCHAR,
 					      DataSpace(H5S_SCALAR)); 
   attrib.write(PredType::NATIVE_UCHAR, &m_sslevel);
+
+
+  {
+    dimsf[0] = 2*m_dblocks*m_wblocks*m_hblocks;
+    DataSpace dataspace(1, dimsf);
+    DataSpace memspace(1, dimsf);
+    
+    m_minmaxdata.write(m_minmaxvals,
+		       m_dataType,
+		       memspace,
+		       dataspace );
+
+  }
 }
 
 void
@@ -284,7 +337,7 @@ BlockFileWriter::setSlice(int d, uchar *tmp)
 
   if (ldno == m_blockSize-1)
     {
-      genSliceBlocks();
+      genZeroLevelSliceBlocks(d);
       dumpSliceBlocks(0, d);
       for(int ib=1; ib<=m_minLevel; ib++)
 	{
@@ -348,11 +401,13 @@ BlockFileWriter::setSlice(int d, uchar *tmp)
 }
 
 void
-BlockFileWriter::genSliceBlocks()
+BlockFileWriter::genZeroLevelSliceBlocks(int d)
 {
   int bb = m_blockSize;
   int bpb = bb*bb*bb*m_bytesPerVoxel;
   int bps = bb*bb*m_bytesPerVoxel;
+
+  int dno = d/m_blockSize;
 
   for (int ldno=0; ldno<m_blockSize; ldno++)
     {
@@ -366,15 +421,26 @@ BlockFileWriter::genSliceBlocks()
 
 	    if (m_bytesPerVoxel == 1)
 	      {
+		// calculate minmax values for level-0
+		uchar minval = 255;
+		uchar maxval = 0;
 		int idx = 0;
 		for(int iw=0; iw<m_blockSize; iw++)
 		  for(int ih=0; ih<m_blockSize; ih++)
 		    {
 		      int jw = qMin(qMax(0, w*m_blockSize + iw), m_width-1);
 		      int jh = qMin(qMax(0, h*m_blockSize + ih), m_height-1);
-		      m_slice[lbidx + idx] = tmp[jw*m_height + jh];
+		      uchar val = tmp[jw*m_height + jh];
+
+		      m_slice[lbidx + idx] = val;
+		      minval = qMin(minval, val);
+		      maxval = qMax(maxval, val);
+
 		      idx++;
 		    }
+		int midx = 2*(dno*m_wblocks*m_hblocks + w*m_hblocks + h);
+		m_minmaxvals[midx + 0] = qMin(minval, m_minmaxvals[midx + 0]);
+		m_minmaxvals[midx + 1] = qMax(maxval, m_minmaxvals[midx + 1]);
 	      }
 	    else if (m_bytesPerVoxel == 2)
 	      {

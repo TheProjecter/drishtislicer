@@ -1057,8 +1057,8 @@ getSaveRawFile()
   bool saveRawFile = false;
   bool ok = false;
   QStringList slevels;
-  slevels << "Yes - save raw file";
-  slevels << "No";  
+  slevels << "No - Do not save raw file";
+  slevels << "Yes - save raw file";  
   QString option = QInputDialog::getItem(0,
 		   "Save Processed Volume",
 		   "Save RAW file along with preprocessed volume ?",

@@ -68,6 +68,7 @@ class BlockFileWriter
 
   uchar *m_sliceAcc;
   uchar *m_slice;
+  uchar *m_minmaxvals;
   int m_minLevel;
 
   //QString m_filename[10];
@@ -75,6 +76,7 @@ class BlockFileWriter
   H5File *m_hdf5file;
   DataSet m_hdf5dataset[10];
   DataSet m_lowres;
+  DataSet m_minmaxdata;
   IntType m_dataType;
 
   void reset();
@@ -83,7 +85,7 @@ class BlockFileWriter
 
   void dumpSliceBlocks(int, int);
 
-  void genSliceBlocks();
+  void genZeroLevelSliceBlocks(int);
   void genSliceBlocks(int);
 };
 

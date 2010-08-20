@@ -58,8 +58,7 @@ RemapWidget::showWidgets()
   m_histogramWidget->show();
   m_gradientWidget->show();
 
-  if (m_volData.voxelType() == _UChar ||
-      m_volData.voxelType() == _Rgb ||
+  if (m_volData.voxelType() == _Rgb ||
       m_volData.voxelType() == _Rgba)
     {
       ui.checkBox->hide();
