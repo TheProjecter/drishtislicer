@@ -136,8 +136,8 @@ BlockFileWriter::createFile(bool writeHeader)
     for(int w=0; w<m_wblocks; w++)
       for(int h=0; h<m_hblocks; h++)
 	{
-	  m_minmaxvals[midx + 0] = 255;
-	  m_minmaxvals[midx + 1] = 0;
+	  m_minmaxvals[2*midx + 0] = 255;
+	  m_minmaxvals[2*midx + 1] = 0;
 	  midx++;
 	}
 }
