@@ -1,10 +1,10 @@
 /********************************************************************************
-** Form generated from reading UI file 'drishtislicer.ui'
+** Form generated from reading ui file 'drishtislicer.ui'
 **
-** Created: Thu 4. Feb 16:12:30 2010
-**      by: Qt User Interface Compiler version 4.6.0
+** Created: Mon Jun 28 10:40:15 2010
+**      by: Qt User Interface Compiler version 4.5.2
 **
-** WARNING! All changes made in this file will be lost when recompiling UI file!
+** WARNING! All changes made in this file will be lost when recompiling ui file!
 ********************************************************************************/
 
 #ifndef UI_DRISHTISLICER_H

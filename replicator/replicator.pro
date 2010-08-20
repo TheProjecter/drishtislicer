@@ -45,10 +45,8 @@ unix {
 !macx {
 
 INCLUDEPATH += . \
-	../../3rdParty/include \
-        ../../3rdParty/include/ImageMagick
-
-LIBPATH += ../../3rdParty/lib
+  /usr/include/ImageMagick \
+  /usr/include/hdf
 
 LIBS += -lnetcdf_c++ \
         -lnetcdf \
