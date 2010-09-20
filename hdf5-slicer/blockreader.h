@@ -22,6 +22,7 @@ class BlockReader : public QThread
 
   void setMaxCacheSize(int);
   void setBlockSize(int);
+  void setGridSize(int, int, int);
   void setBytesPerVoxel(int);
   void setVoxelType(int);
   void setBaseFilename(QString);
@@ -40,6 +41,7 @@ class BlockReader : public QThread
   void run();
 
  private :
+  int m_depth, m_width, m_height;
   int m_voxelType;
   int m_minLevel;
   int m_level;

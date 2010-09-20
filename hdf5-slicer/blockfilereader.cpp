@@ -261,6 +261,7 @@ BlockFileReader::initializeBlockReader()
   m_blockReader.setVoxelType(m_voxelType);
   m_blockReader.setBytesPerVoxel(m_bytesPerVoxel);
   m_blockReader.setBaseFilename(m_baseFilename);
+  m_blockReader.setGridSize(m_depth, m_width, m_height);
   m_blockReader.setBlockGridSize(m_dblocks, m_wblocks, m_hblocks);
   m_blockReader.setMinLevel(m_minLevel);
 

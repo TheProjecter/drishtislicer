@@ -245,9 +245,19 @@ BlockFileWriter::startAddSlice()
       bdim[1] = bdim[0];
       bdim[2] = bdim[0];
       
-      dimsf[0] = m_dblocks*bdim[0];
-      dimsf[1] = m_wblocks*bdim[1];
-      dimsf[2] = m_hblocks*bdim[2];
+      //if (ib == 0)
+	{
+	  int lod2 = qPow(2, ib);
+	  dimsf[0] = m_depth/lod2 + (m_depth%lod2 > 0);
+	  dimsf[1] = m_width/lod2 + (m_width%lod2 > 0);
+	  dimsf[2] = m_height/lod2+ (m_height%lod2 > 0);
+	}
+//      else
+//	{
+//	  dimsf[0] = m_dblocks*bdim[0];
+//	  dimsf[1] = m_wblocks*bdim[1];
+//	  dimsf[2] = m_hblocks*bdim[2];
+//	}
       DataSpace dataspace( 3, dimsf );
       
       DSetCreatPropList cparms;
@@ -317,7 +327,8 @@ BlockFileWriter::startAddSlice()
 void
 BlockFileWriter::endAddSlice()
 {
-  if (m_depth-1 < m_blockSize-1)
+  int remainder = (m_depth-1)%m_blockSize;
+  if (remainder > 0)
     {
       genZeroLevelSliceBlocks(m_depth-1);
       dumpSliceBlocks(0, m_depth-1);
@@ -328,11 +339,10 @@ BlockFileWriter::endAddSlice()
 	}
     }
 
+  saveDict();
   m_hdf5file->close();
 
   endSliceBlock();
-
-  saveDict();
 }
 
 void
@@ -588,21 +598,45 @@ BlockFileWriter::genZeroLevelSliceBlocks(int d)
 									\
 	  b++;								\
 	}								\
-  rms /= (bb0*bb0*bb0);							\
+  rms /= (bb0*bb0*bb0);						\
   rms = qSqrt(rms);							\
 //-------
 
+////-------
 //#define interpolateVoxel(T)						\
 //  T* slc1 = (T*)tmp;							\
-//  T* slc0 = (T*)slice0;						\
+//  T* slc0 = (T*)slice0;							\
 //  int b = 0;								\
-//  for(int is=0; is<bb0; is+=2)					\
+//  float v = 0.0;							\
+//  float rms = 0.0;							\
+//  for(int is=0; is<bb0; is+=2)						\
 //    for(int iw=0; iw<bb0; iw+=2)					\
 //      for(int ih=0; ih<bb0; ih+=2)					\
 //	{								\
 //	  slc1[b] = slc0[is*bb0*bb0+iw*bb0+ih];				\
+//									\
+//	  v = slc1[b]-slc0[is*bb0*bb0+iw*bb0+ih];			\
+//	  rms += v*v;							\
+//	  v = slc1[b]-slc0[is*bb0*bb0+iw*bb0+(ih+1)];			\
+//	  rms += v*v;							\
+//	  v = slc1[b]-slc0[is*bb0*bb0+(iw+1)*bb0+ih];			\
+//	  rms += v*v;							\
+//	  v = slc1[b]-slc0[is*bb0*bb0+(iw+1)*bb0+(ih+1)];		\
+//	  rms += v*v;							\
+//	  v = slc1[b]-slc0[(is+1)*bb0*bb0+iw*bb0+ih];			\
+//	  rms += v*v;							\
+//	  v = slc1[b]-slc0[(is+1)*bb0*bb0+iw*bb0+(ih+1)];		\
+//	  rms += v*v;							\
+//	  v = slc1[b]-slc0[(is+1)*bb0*bb0+(iw+1)*bb0+ih];		\
+//	  rms += v*v;							\
+//	  v = slc1[b]-slc0[(is+1)*bb0*bb0+(iw+1)*bb0+(ih+1)];		\
+//	  rms += v*v;							\
+//									\
 //	  b++;								\
-//	}
+//	}								\
+//  rms /= (bb0*bb0*bb0);						\
+//  rms = qSqrt(rms);							\
+////-------
 
 void
 BlockFileWriter::genSliceBlocks(int level, int d)
@@ -614,118 +648,152 @@ BlockFileWriter::genSliceBlocks(int level, int d)
 
   int dno = d/m_blockSize;
 
-  uchar *tmp = new uchar[bpb1];
+  //uchar *tmp = new uchar[bpb1];
 
   //memset(m_localHistogram, 0, m_wblocks*m_hblocks*256*2);
 
-  int lbno = 0;
-  for(int w=0; w<m_wblocks; w++)
-    for(int h=0; h<m_hblocks; h++)
+  int lod0 = qPow(2, level-1);
+  int wend0 = m_width/lod0 + (m_width%lod0 > 0);
+  int hend0 = m_height/lod0 + (m_height%lod0 > 0);
+  int dend0 = m_depth/lod0 + (m_depth%lod0 > 0);
+
+  int lod1 = qPow(2, level);
+  int wend1 = m_width/lod1 + (m_width%lod1 > 0);
+  int hend1 = m_height/lod1 + (m_height%lod1 > 0);
+
+  for(int i=0; i<bb1; i++)
+    for(int w=0; w<wend1; w++)
+      for(int h=0; h<hend1; h++)
       {
-	int idx0 = lbno*bpb0;
-	int idx1 = lbno*bpb1;
-	uchar *slice1 = m_slice + idx1;
-	uchar *slice0 = m_slice + idx0;
+	int dd0 = qMin(2*i, dend0);
+	int dd1 = qMin(2*i+1, dend0);
+	int ww0 = qMin(2*w, wend0);
+	int ww1 = qMin(2*w+1, wend0);
+	int hh0 = qMin(2*h, hend0);
+	int hh1 = qMin(2*h+1, hend0);
 
-	if (m_voxelType == _UChar)
-	  {
-	    interpolateVoxel(uchar)
-
-	    int ridx = m_minLevel*(dno*m_wblocks*m_hblocks + w*m_hblocks + h);
-	    m_rmsValues[ridx + (level-1)] = rms;
-
-//	    for(b=0; b<bpb1; b++)
-//	      m_localHistogram[lbno*256 + tmp[b]]++;
-	  }
-	else if (m_voxelType == _Char)
-	  {
-	    interpolateVoxel(char)
-	  }
-	else if (m_voxelType == _UShort)
-	  {
-	    interpolateVoxel(ushort)
-	  }
-	else if (m_voxelType == _Short)
-	  {
-	    interpolateVoxel(short)
-	  }
-	else if (m_voxelType == _Int)
-	  {
-	    interpolateVoxel(int)
-	  }
-	else if (m_voxelType == _Float)
-	  {
-	    interpolateVoxel(float)
-	  }
-	else if (m_voxelType == _Rgb || m_voxelType == _Rgba)
-	  {
-	    int nv = 3;
-	    if (m_voxelType == _Rgba) nv = 4;
-	    int b = 0;
-	    for(int is=0; is<bb0; is+=2)
-	      for(int iw=0; iw<bb0; iw+=2)
-		for(int ih=0; ih<bb0; ih+=2)
-		  {
-		    for(int vi=0; vi<nv; vi++)
-		      tmp[nv*b+vi] = (*(slice0 + nv*(is*bb0*bb0+iw*bb0+ih)        +vi) +
-				      *(slice0 + nv*(is*bb0*bb0+iw*bb0+(ih+1))    +vi) +
-				      *(slice0 + nv*(is*bb0*bb0+(iw+1)*bb0+ih)    +vi) +
-				      *(slice0 + nv*(is*bb0*bb0+(iw+1)*bb0+(ih+1))+vi) +
-				      *(slice0 + nv*((is+1)*bb0*bb0+iw*bb0+ih)    +vi) +
-				      *(slice0 + nv*((is+1)*bb0*bb0+iw*bb0+(ih+1))+vi) +
-				      *(slice0 + nv*((is+1)*bb0*bb0+(iw+1)*bb0+ih)+vi) +
-				      *(slice0 + nv*((is+1)*bb0*bb0+(iw+1)*bb0+(ih+1))+vi))/8;
-		    b++;
-		  }
-	  }
-
-	memcpy(slice1, tmp, bpb1);	
-	lbno ++;
+	m_sliceAcc[i*wend1*hend1 + w*hend1 + h] =
+	        (m_sliceAcc[dd0*wend0*hend0 + ww0*hend0 + hh0] +
+		 m_sliceAcc[dd0*wend0*hend0 + ww0*hend0 + hh1] +
+		 m_sliceAcc[dd0*wend0*hend0 + ww1*hend0 + hh0] +
+		 m_sliceAcc[dd0*wend0*hend0 + ww1*hend0 + hh1] +
+		 m_sliceAcc[dd1*wend0*hend0 + ww0*hend0 + hh0] +
+		 m_sliceAcc[dd1*wend0*hend0 + ww0*hend0 + hh1] +
+		 m_sliceAcc[dd1*wend0*hend0 + ww1*hend0 + hh0] +
+		 m_sliceAcc[dd1*wend0*hend0 + ww1*hend0 + hh1])/8;
       }
-  delete [] tmp;
+
+
+
+//  int lbno = 0;
+//  for(int w=0; w<m_wblocks; w++)
+//    for(int h=0; h<m_hblocks; h++)
+//      {
+//	int idx0 = lbno*bpb0;
+//	int idx1 = lbno*bpb1;
+//	uchar *slice1 = m_slice + idx1;
+//	uchar *slice0 = m_slice + idx0;
+//
+//	if (m_voxelType == _UChar)
+//	  {
+//	    interpolateVoxel(uchar)
+//
+//	    int ridx = m_minLevel*(dno*m_wblocks*m_hblocks + w*m_hblocks + h);
+//	    m_rmsValues[ridx + (level-1)] = rms;
+//
+////	    for(b=0; b<bpb1; b++)
+////	      m_localHistogram[lbno*256 + tmp[b]]++;
+//	  }
+//	else if (m_voxelType == _Char)
+//	  {
+//	    interpolateVoxel(char)
+//	  }
+//	else if (m_voxelType == _UShort)
+//	  {
+//	    interpolateVoxel(ushort)
+//	  }
+//	else if (m_voxelType == _Short)
+//	  {
+//	    interpolateVoxel(short)
+//	  }
+//	else if (m_voxelType == _Int)
+//	  {
+//	    interpolateVoxel(int)
+//	  }
+//	else if (m_voxelType == _Float)
+//	  {
+//	    interpolateVoxel(float)
+//	  }
+//	else if (m_voxelType == _Rgb || m_voxelType == _Rgba)
+//	  {
+//	    int nv = 3;
+//	    if (m_voxelType == _Rgba) nv = 4;
+//	    int b = 0;
+//	    for(int is=0; is<bb0; is+=2)
+//	      for(int iw=0; iw<bb0; iw+=2)
+//		for(int ih=0; ih<bb0; ih+=2)
+//		  {
+//		    for(int vi=0; vi<nv; vi++)
+//		      tmp[nv*b+vi] = (*(slice0 + nv*(is*bb0*bb0+iw*bb0+ih)        +vi) +
+//				      *(slice0 + nv*(is*bb0*bb0+iw*bb0+(ih+1))    +vi) +
+//				      *(slice0 + nv*(is*bb0*bb0+(iw+1)*bb0+ih)    +vi) +
+//				      *(slice0 + nv*(is*bb0*bb0+(iw+1)*bb0+(ih+1))+vi) +
+//				      *(slice0 + nv*((is+1)*bb0*bb0+iw*bb0+ih)    +vi) +
+//				      *(slice0 + nv*((is+1)*bb0*bb0+iw*bb0+(ih+1))+vi) +
+//				      *(slice0 + nv*((is+1)*bb0*bb0+(iw+1)*bb0+ih)+vi) +
+//				      *(slice0 + nv*((is+1)*bb0*bb0+(iw+1)*bb0+(ih+1))+vi))/8;
+//		    b++;
+//		  }
+//	  }
+//
+//	memcpy(slice1, tmp, bpb1);	
+//	lbno ++;
+//      }
+//  delete [] tmp;
     
 }
 
 void
 BlockFileWriter::dumpSliceBlocks(int ib, int d)
 {
-  int bb = m_blockSize/qPow(2, ib);
+  int lod2 = qPow(2, ib);
+
+  int bb = m_blockSize/lod2;
   int bpb = bb*bb*bb*m_bytesPerVoxel;
 
   int dno = d/m_blockSize;
   int blkno = dno*m_wblocks*m_hblocks;	  
 
-  int lbno = 0;
-  for(int w=0; w<m_wblocks; w++)
-    for(int h=0; h<m_hblocks; h++)
-      {	
-	hsize_t bdim[3];              // block dimensions
-	bdim[0] = m_blockSize/qPow(2, ib);
-	bdim[1] = bdim[0];
-	bdim[2] = bdim[0];
 
-	hsize_t offset[3];              // block dimensions
-	offset[0] = dno*bb;
-	offset[1] = w*bb;
-	offset[2] = h*bb;
+  hsize_t offset[3];              // block dimensions
+  offset[0] = (d/m_blockSize)*bb;
+  offset[1] = 0;
+  offset[2] = 0;
 
-	hsize_t dimsf[3];              // dataset dimensions
-	dimsf[0] = m_dblocks*bdim[0];
-	dimsf[1] = m_wblocks*bdim[1];
-	dimsf[2] = m_hblocks*bdim[2];
+  hsize_t bdim[3];              // block dimensions
+  int totslices = (m_depth/lod2 + (m_depth%lod2 > 0));
+  int nslices = totslices - offset[0];
+  bdim[0] = qMin(bb, nslices);
+  bdim[1] = m_width/lod2 + (m_width%lod2 > 0);
+  bdim[2] = m_height/lod2+ (m_height%lod2 > 0);
+      
+  hsize_t dimsf[3];              // dataset dimensions
+  dimsf[0] = m_depth/lod2 + (m_depth%lod2 > 0);
+  dimsf[1] = m_width/lod2 + (m_width%lod2 > 0);
+  dimsf[2] = m_height/lod2+ (m_height%lod2 > 0);
 
-	DataSpace memspace(3, bdim);
-	DataSpace dspace(3, dimsf);
+//  //if (ib == 0)
+//  QMessageBox::information(0, "", QString("%1 (%2) : %3 : %4").		\
+//			   arg(ib).arg(d).arg(offset[0]).arg(bdim[0]));
 
-	dspace.selectHyperslab(H5S_SELECT_SET, bdim, offset);
-
-	m_hdf5dataset[ib].write(m_slice + lbno*bpb,
-				m_dataType,
-				memspace, dspace );
-	
-	lbno ++;
-      }
-
+  DataSpace memspace(3, bdim);
+  DataSpace dspace(3, dimsf);
+      
+  dspace.selectHyperslab(H5S_SELECT_SET, bdim, offset);
+      
+  m_hdf5dataset[ib].write(m_sliceAcc,
+			  m_dataType,
+			  memspace, dspace );
 
   if (ib == 0)
     {
