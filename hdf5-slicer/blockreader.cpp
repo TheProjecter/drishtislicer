@@ -54,13 +54,20 @@ void BlockReader::setBlockGridSize(int dno, int wno, int hno)
   m_wblocks = wno;
   m_hblocks = hno;
 }
+void BlockReader::setGridSize(int d, int w, int h)
+{
+  m_depth = d;
+  m_width = w;
+  m_height = h;
+}
 
 void BlockReader::setBlockCache(int l, QHash<long, uchar*> *bc) { m_blockCache[l] = bc; }
 
 void
 BlockReader::getBlock(int level, int blkno, uchar* block)
 {
-  int bb = m_blockSize/qPow(2, level);
+  int lod2 = qPow(2, level);
+  int bb = m_blockSize/lod2;
 
   int dno = blkno/(m_wblocks*m_hblocks);
   int wno = (blkno - dno*m_wblocks*m_hblocks)/m_hblocks;
@@ -91,13 +98,24 @@ BlockReader::getBlock(int level, int blkno, uchar* block)
   offset[2] = hno*bb;
   count[0] = count[1] = count[2] = bb;
 
+  count[0] = qMin(m_blockSize, m_depth -dno*m_blockSize-1)/lod2;
+  count[1] = qMin(m_blockSize, m_width -wno*m_blockSize-1)/lod2;
+  count[2] = qMin(m_blockSize, m_height-hno*m_blockSize-1)/lod2;
+
   dataspace.selectHyperslab( H5S_SELECT_SET, count, offset );
 
-  hsize_t dimsm[3];
-  dimsm[0] = bb;
-  dimsm[1] = bb;
-  dimsm[2] = bb;
-  DataSpace memspace( 3, dimsm );
+  hsize_t mdim[3];
+  mdim[0] = bb;
+  mdim[1] = bb;
+  mdim[2] = bb;
+  hsize_t memoffset[3];
+  memoffset[0] = 0;
+  memoffset[1] = 0;
+  memoffset[2] = 0;
+  DataSpace memspace( 3, mdim );
+  memspace.selectHyperslab(H5S_SELECT_SET,
+			   count,
+			   memoffset);
 
   m_hdf5dataset[level].read( block,
 			     m_dataType,
