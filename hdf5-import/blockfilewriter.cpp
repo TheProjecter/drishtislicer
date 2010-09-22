@@ -418,7 +418,7 @@ BlockFileWriter::setSlice(int d, uchar *tmp)
 	  dumpSliceBlocks(ib, d);
 	}
       
-      //memset(m_slice, 0, m_wblocks*m_hblocks*bpb);
+      memset(m_slice, 0, m_blockSize*m_width*m_height*m_bytesPerVoxel);
       memset(m_sliceAcc, 0, m_blockSize*m_width*m_height*m_bytesPerVoxel);
     }
 
@@ -669,11 +669,11 @@ BlockFileWriter::genSliceBlocks(int level, int d)
     for(int w=0; w<wend1; w++)
       for(int h=0; h<hend1; h++)
       {
-	int dd0 = qMin(2*i, dend0);
+	int dd0 = qMin(2*i,   dend0);
 	int dd1 = qMin(2*i+1, dend0);
-	int ww0 = qMin(2*w, wend0);
+	int ww0 = qMin(2*w,   wend0);
 	int ww1 = qMin(2*w+1, wend0);
-	int hh0 = qMin(2*h, hend0);
+	int hh0 = qMin(2*h,   hend0);
 	int hh1 = qMin(2*h+1, hend0);
 
 	v0 = (m_slice[dd0*wend0*hend0 + ww0*hend0 + hh0] +
@@ -705,8 +705,13 @@ BlockFileWriter::genSliceBlocks(int level, int d)
 	  for(int w0=0; w0<we; w0++)
 	    for(int h0=0; h0<he; h0++)
 	      {
-		float v = (m_sliceAcc[d0*m_width*m_height + (wst0+w0)*m_height + (hst0+h0)] -
-			   m_slice[d0*wend1*hend1/lod1 + (wst1+w0)*hend1/lod1 + (hst1+h0)/lod1]);
+		int idx0 = (d0*m_width*m_height +
+			    (wst0+w0)*m_height +
+			    (hst0+h0));
+		int idx1 = (d0/lod1*wend1*hend1 +
+			    (wst1+w0/lod1)*hend1 +
+			    (hst1+h0/lod1));
+		float v = m_sliceAcc[idx0] - m_slice[idx1];
 		rms += v*v;
 		nb ++;
 	      }
