@@ -129,10 +129,10 @@ BlockFileWriter::createFile(bool writeHeader)
       vsize /= 8;
     }
 
-//  m_minLevel = 0;
-//  if (m_sslevel > 1)
-//    m_minLevel = logf(m_sslevel)/logf(2.0)-1;
-  m_minLevel = 5;
+  //  m_minLevel = 5;
+  m_minLevel = 0;
+  while(qPow(2, m_minLevel) < m_blockSize)
+    m_minLevel++;
 
   m_ssd = m_depth/m_sslevel + (m_depth%m_sslevel > 0);
   m_ssw = m_width/m_sslevel + (m_width%m_sslevel > 0);
@@ -498,9 +498,10 @@ BlockFileWriter::genZeroLevelSliceBlocks(int d)
 		// calculate minmax values for level-0
 		uchar minval = 255;
 		uchar maxval = 0;
-		int idx = 0;
-		for(int iw=0; iw<m_blockSize; iw++)
-		  for(int ih=0; ih<m_blockSize; ih++)
+		int we = qMin(m_blockSize, m_width-w*m_blockSize);
+		int he = qMin(m_blockSize, m_height-h*m_blockSize);
+		for(int iw=0; iw<we; iw++)
+		  for(int ih=0; ih<he; ih++)
 		    {
 		      int jw = qMin(qMax(0, w*m_blockSize + iw), m_width-1);
 		      int jh = qMin(qMax(0, h*m_blockSize + ih), m_height-1);
@@ -510,12 +511,15 @@ BlockFileWriter::genZeroLevelSliceBlocks(int d)
 		      maxval = qMax(maxval, val);
 
 		      m_localHistogram[lbno*256 + val]++;
-
-		      idx++;
 		    }
-		int midx = 2*(dno*m_wblocks*m_hblocks + w*m_hblocks + h);
+
+		int midx = 2*(dno*m_wblocks*m_hblocks + lbno);
 		m_minmaxvals[midx + 0] = qMin(minval, m_minmaxvals[midx + 0]);
 		m_minmaxvals[midx + 1] = qMax(maxval, m_minmaxvals[midx + 1]);
+
+//		int midx = 2*(dno*m_wblocks*m_hblocks + w*m_hblocks + h);
+//		m_minmaxvals[midx + 0] = qMin(minval, m_minmaxvals[midx + 0]);
+//		m_minmaxvals[midx + 1] = qMax(maxval, m_minmaxvals[midx + 1]);
 	      }
 //	    else if (m_bytesPerVoxel == 2)
 //	      {
@@ -607,14 +611,50 @@ BlockFileWriter::genZeroLevelSliceBlocks(int d)
   rms = qSqrt(rms);							\
 //-------
 
+//-------
+#define alternateVoxel(T)						\
+  T* slc1 = (T*)tmp;							\
+  T* slc0 = (T*)slice0;							\
+  int b = 0;								\
+  float v = 0.0;							\
+  float rms = 0.0;							\
+  for(int is=0; is<bb0; is+=2)						\
+    for(int iw=0; iw<bb0; iw+=2)					\
+      for(int ih=0; ih<bb0; ih+=2)					\
+	{								\
+	  slc1[b] = slc0[is*bb0*bb0+iw*bb0+ih];				\
+									\
+	  v = slc1[b]-slc0[is*bb0*bb0+iw*bb0+ih];			\
+	  rms += v*v;							\
+	  v = slc1[b]-slc0[is*bb0*bb0+iw*bb0+(ih+1)];			\
+	  rms += v*v;							\
+	  v = slc1[b]-slc0[is*bb0*bb0+(iw+1)*bb0+ih];			\
+	  rms += v*v;							\
+	  v = slc1[b]-slc0[is*bb0*bb0+(iw+1)*bb0+(ih+1)];		\
+	  rms += v*v;							\
+	  v = slc1[b]-slc0[(is+1)*bb0*bb0+iw*bb0+ih];			\
+	  rms += v*v;							\
+	  v = slc1[b]-slc0[(is+1)*bb0*bb0+iw*bb0+(ih+1)];		\
+	  rms += v*v;							\
+	  v = slc1[b]-slc0[(is+1)*bb0*bb0+(iw+1)*bb0+ih];		\
+	  rms += v*v;							\
+	  v = slc1[b]-slc0[(is+1)*bb0*bb0+(iw+1)*bb0+(ih+1)];		\
+	  rms += v*v;							\
+									\
+	  b++;								\
+	}								\
+  rms /= (bb0*bb0*bb0);						\
+  rms = qSqrt(rms);							\
+//-------
+
 ////-------
 //#define interpolateVoxel(T)						\
 //  T* slc1 = (T*)tmp;							\
-//  T* slc0 = (T*)slice0;							\
+//  T* slc0 = (T*)slice0;						\
 //  int b = 0;								\
 //  float v = 0.0;							\
 //  float rms = 0.0;							\
-//  for(int is=0; is<bb0; is+=2)						\
+//  for(int is=0; is<bb0; is+=2)					\
 //    for(int iw=0; iw<bb0; iw+=2)					\
 //      for(int ih=0; ih<bb0; ih+=2)					\
 //	{								\
